@@ -1,0 +1,369 @@
+<template>
+  <div class="dashboard">
+    <!-- ===== 顶部导航栏 ===== -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h1 class="system-name">Gas System 监控看板</h1>
+          <p class="subtitle">实时数据监测与预警</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <button class="export-btn" :disabled="exporting" @click="handleExport">
+          {{ exporting ? "导出中..." : "📄 导出报告" }}
+        </button>
+        <span class="status-badge">● 系统运行中</span>
+        <span class="clock">{{ currentTime }}</span>
+      </div>
+    </header>
+
+    <!-- ===== 主体内容 ===== -->
+    <main class="main-content">
+      <!-- 左侧：4 张实时指标卡片 -->
+      <section class="left-panel">
+        <DataCard
+          v-for="item in indicators"
+          :key="item.title"
+          :title="item.title"
+          :value="item.value"
+          :unit="item.unit"
+          :threshold="item.threshold"
+        />
+      </section>
+
+      <!-- 右侧：预测图表 + 预警列表 -->
+      <section class="right-panel">
+        <!-- 预测趋势图 -->
+        <div class="panel chart-panel">
+          <div class="panel-header">
+            <h3>VOCs 浓度预测趋势</h3>
+            <span class="panel-meta">更新于 {{ latestUpdate }}</span>
+          </div>
+          <div class="chart-container">
+            <PredictionChart :limit="80" />
+          </div>
+        </div>
+
+        <!-- 预警信息列表 -->
+        <div class="panel alert-panel">
+          <div class="panel-header">
+            <h3>预警信息列表</h3>
+            <span v-if="alertCount" class="alert-badge">
+              {{ alertCount }} 条预警
+            </span>
+          </div>
+          <div class="alert-container">
+            <AlertList />
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted, onUnmounted } from "vue";
+import DataCard from "@/components/DataCard.vue";
+import AlertList from "@/components/AlertList.vue";
+import PredictionChart from "@/components/PredictionChart.vue";
+import api from "@/utils/api";
+
+// ========================
+// 实时指标数据
+// ========================
+const indicators = ref([
+  { title: "VOCs 浓度", value: 0, unit: "mg/m³", threshold: 0.8 },
+  { title: "温度", value: 0, unit: "°C", threshold: 30 },
+  { title: "湿度", value: 0, unit: "%", threshold: 70 },
+  { title: "风速", value: 0, unit: "m/s", threshold: 2.0 },
+]);
+
+const latestUpdate = ref("加载中...");
+const currentTime = ref(new Date().toLocaleString());
+const alertCount = computed(() => 0); // 由 AlertList 自行管理
+
+// ========================
+// 轮询实时数据（每 5 秒）
+// ========================
+const fetchRealtimeData = async () => {
+  try {
+    const res = await api.getRealtimeData();
+    indicators.value[0].value = res.voc ?? 0;
+    indicators.value[1].value = res.temp ?? 0;
+    indicators.value[2].value = res.humidity ?? 0;
+    indicators.value[3].value = res.wind ?? 0;
+    latestUpdate.value = new Date().toLocaleTimeString();
+  } catch (err) {
+    // 后端未就绪时使用模拟数据
+    indicators.value[0].value = 0.85;
+    indicators.value[1].value = 26.3;
+    indicators.value[2].value = 68;
+    indicators.value[3].value = 1.2;
+    latestUpdate.value = new Date().toLocaleTimeString();
+  }
+};
+
+// ========================
+// 导出报告
+// ========================
+const exporting = ref(false);
+
+const handleExport = async () => {
+  exporting.value = true;
+  try {
+    const blob = await api.exportReport({
+      timestamp: Date.now(),
+    });
+    // 触发浏览器下载
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Gas监控报告_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, "")}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("[Dashboard] 导出失败:", err);
+    alert("导出失败，请确认后端导出接口可用");
+  } finally {
+    exporting.value = false;
+  }
+};
+
+// ========================
+// 生命周期
+// ========================
+let clockTimer = null;
+let realtimeTimer = null;
+
+onMounted(() => {
+  // 系统时钟
+  clockTimer = setInterval(() => {
+    currentTime.value = new Date().toLocaleString();
+  }, 1000);
+
+  // 实时数据 5 秒轮询
+  fetchRealtimeData();
+  realtimeTimer = setInterval(fetchRealtimeData, 5000);
+});
+
+onUnmounted(() => {
+  clearInterval(clockTimer);
+  clearInterval(realtimeTimer);
+});
+</script>
+
+<style scoped>
+/* ===== 全局重置 ===== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: linear-gradient(135deg, #0a0f1a 0%, #0d1422 100%);
+  color: #e0e6f0;
+  font-family: "Segoe UI", "PingFang SC", sans-serif;
+  overflow: hidden;
+}
+
+/* ===== 顶部栏 ===== */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 32px;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(46, 123, 207, 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logo-icon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #1e3a8a, #00d4ff);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+.system-name {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  background: linear-gradient(to right, #fff, #8bb9ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: #6c7a93;
+  margin-top: 2px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.status-badge {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.clock {
+  font-size: 15px;
+  font-weight: 500;
+  color: #8b98b0;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 导出按钮 ===== */
+.export-btn {
+  padding: 8px 20px;
+  background: linear-gradient(135deg, #00d4ff, #009cbb);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s;
+}
+
+.export-btn:hover:not(:disabled) {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===== 主体网格 ===== */
+.main-content {
+  display: grid;
+  grid-template-columns: 35% 65%;
+  gap: 24px;
+  padding: 24px 32px;
+  height: calc(100vh - 100px);
+  min-height: 0;
+}
+
+.left-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ===== 面板容器 ===== */
+.panel {
+  background: rgba(18, 26, 46, 0.6);
+  backdrop-filter: blur(6px);
+  border-radius: 16px;
+  border: 1px solid rgba(46, 123, 207, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.panel-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #cdd6f0;
+}
+
+.panel-meta {
+  font-size: 13px;
+  color: #576580;
+}
+
+.alert-badge {
+  font-size: 12px;
+  color: #e6a23c;
+  background: rgba(230, 162, 60, 0.12);
+  padding: 3px 12px;
+  border-radius: 12px;
+}
+
+.right-panel {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 24px;
+  min-height: 0;
+}
+
+.chart-panel .chart-container {
+  height: calc(100% - 56px);
+  padding: 4px 16px 12px;
+}
+
+.alert-panel .alert-container {
+  height: calc(100% - 56px);
+  overflow-y: auto;
+}
+
+.alert-container::-webkit-scrollbar {
+  width: 5px;
+}
+.alert-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+.alert-container::-webkit-scrollbar-thumb {
+  background: #2e3a56;
+  border-radius: 10px;
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 1200px) {
+  .main-content {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .right-panel {
+    grid-template-rows: 300px 300px;
+  }
+}
+</style>
