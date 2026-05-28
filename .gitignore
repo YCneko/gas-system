@@ -23,7 +23,14 @@ Thumbs.db
 *.log
 *.tmp
 
-# 环境变量文件（如果有，不要提交）
+# 测试数据文件
+*.csv
+*.xlsx
+*.xls
+*.jsonl
+test_*.csv
+
+# 环境变量文件
 .env
 *.env.local
 
@@ -35,6 +42,7 @@ instance/
 build/
 dist/
 *.egg-info/
+
 # Node / Vue
 node_modules/
 /dist/
@@ -60,3 +68,11 @@ yarn-error.log*
 # OS junk
 .DS_Store
 Thumbs.db
+
+# ML 模型文件（体积大，不纳入版本控制）
+*.keras
+*.h5
+*.pkl
+*.npy
+*.npz
+*.png
