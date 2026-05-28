@@ -42,37 +42,50 @@ def load_data():
     if emission_df.empty:
         raise ValueError("排放数据为空，请确认数据库中包含过去3个月的 emission_data 记录")
 
+    # 按分钟对齐（时序误差 ≤1 分钟）
     for df in [emission_df, weather_df, equipment_df]:
-        df['hour'] = pd.to_datetime(df['timestamp']).dt.floor('h')
+        df['minute'] = pd.to_datetime(df['timestamp']).dt.floor('min')
 
-    emission_hourly = emission_df.groupby('hour')['voc_concentration'].mean().reset_index()
+    emission_min = emission_df.groupby('minute')['voc_concentration'].mean().reset_index()
 
     if not weather_df.empty:
-        weather_hourly = weather_df.groupby('hour').agg(
+        weather_min = weather_df.groupby('minute').agg(
             {'temperature': 'mean', 'humidity': 'mean', 'wind_speed': 'mean'}
         ).reset_index()
     else:
-        weather_hourly = pd.DataFrame(columns=['hour', 'temperature', 'humidity', 'wind_speed'])
+        weather_min = pd.DataFrame(columns=['minute', 'temperature', 'humidity', 'wind_speed'])
 
     if not equipment_df.empty:
-        equipment_hourly = equipment_df.groupby('hour')['operating_load'].mean().reset_index()
+        equipment_min = equipment_df.groupby('minute')['operating_load'].mean().reset_index()
     else:
-        equipment_hourly = pd.DataFrame(columns=['hour', 'operating_load'])
+        equipment_min = pd.DataFrame(columns=['minute', 'operating_load'])
 
-    merged = emission_hourly.copy()
-    if not weather_hourly.empty:
-        merged = merged.merge(weather_hourly, on='hour', how='left')
+    # 分钟级合并
+    merged = emission_min.copy()
+    if not weather_min.empty:
+        merged = merged.merge(weather_min, on='minute', how='left')
     else:
         for col in ['temperature', 'humidity', 'wind_speed']:
             merged[col] = np.nan
-    if not equipment_hourly.empty:
-        merged = merged.merge(equipment_hourly, on='hour', how='left')
+    if not equipment_min.empty:
+        merged = merged.merge(equipment_min, on='minute', how='left')
     else:
         merged['operating_load'] = np.nan
 
-    merged = merged.sort_values('hour').reset_index(drop=True)
+    merged = merged.sort_values('minute').reset_index(drop=True)
     merged = merged.ffill().bfill().fillna(0)
-    return merged
+
+    # 降采样至小时级用于模型训练（取小时均值）
+    merged['hour'] = merged['minute'].dt.floor('h')
+    hourly = merged.groupby('hour').agg({
+        'voc_concentration': 'mean',
+        'temperature': 'mean',
+        'humidity': 'mean',
+        'wind_speed': 'mean',
+        'operating_load': 'mean',
+    }).reset_index()
+    print(f"  分钟级对齐完成，合并后 {len(merged)} 条 → 降采样至 {len(hourly)} 小时记录")
+    return hourly
 
 
 def correlation_analysis(df):

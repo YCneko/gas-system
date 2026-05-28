@@ -55,19 +55,20 @@ def _get_scaler_and_cols():
 
 
 def _build_feature_sequence():
-    """从数据库获取最新数据并构建 LSTM 输入序列"""
+    """从数据库获取最新数据并构建 LSTM 输入序列（分钟级对齐，≤1分钟误差）"""
     LOOKBACK = 24
     from sqlalchemy import desc
 
+    # 获取最近 ~36 小时的排放记录
     emission_records = (EmissionData.query
                         .order_by(desc(EmissionData.timestamp))
-                        .limit(LOOKBACK + 12).all())
+                        .limit(LOOKBACK * 2 + 12).all())
     if not emission_records:
         return None, "排放数据为空"
 
     emission_records = sorted(emission_records, key=lambda r: r.timestamp)
-    min_ts = emission_records[0].timestamp.replace(minute=0, second=0, microsecond=0)
-    max_ts = emission_records[-1].timestamp.replace(minute=0, second=0, microsecond=0) + pd.Timedelta(hours=1)
+    min_ts = emission_records[0].timestamp.replace(second=0, microsecond=0)
+    max_ts = emission_records[-1].timestamp.replace(second=0, microsecond=0) + pd.Timedelta(minutes=1)
 
     # 批量查询气象和设备数据
     all_weather = (WeatherData.query
@@ -79,32 +80,35 @@ def _build_feature_sequence():
                      .filter(EquipmentData.timestamp < max_ts)
                      .all())
 
-    # 按小时分组取均值
-    weather_by_hour = {}
+    # 按分钟分组取均值（时序对齐误差 ≤1 分钟）
+    def _minute_key(ts):
+        return ts.replace(second=0, microsecond=0)
+
+    weather_by_min = {}
     for w in all_weather:
-        h = w.timestamp.replace(minute=0, second=0, microsecond=0)
-        weather_by_hour.setdefault(h, []).append(w)
-    weather_avg = {h: {
+        k = _minute_key(w.timestamp)
+        weather_by_min.setdefault(k, []).append(w)
+    weather_avg = {k: {
         'temperature': np.mean([r.temperature for r in recs if r.temperature is not None]) if recs else None,
         'humidity': np.mean([r.humidity for r in recs if r.humidity is not None]) if recs else None,
         'wind_speed': np.mean([r.wind_speed for r in recs if r.wind_speed is not None]) if recs else None,
-    } for h, recs in weather_by_hour.items()}
+    } for k, recs in weather_by_min.items()}
 
-    equipment_by_hour = {}
+    equipment_by_min = {}
     for e in all_equipment:
-        h = e.timestamp.replace(minute=0, second=0, microsecond=0)
-        equipment_by_hour.setdefault(h, []).append(e)
-    equipment_avg = {h: np.mean([r.operating_load for r in recs if r.operating_load is not None])
-                     if recs else None for h, recs in equipment_by_hour.items()}
+        k = _minute_key(e.timestamp)
+        equipment_by_min.setdefault(k, []).append(e)
+    equipment_avg = {k: np.mean([r.operating_load for r in recs if r.operating_load is not None])
+                     if recs else None for k, recs in equipment_by_min.items()}
 
     rows = []
     for em in emission_records:
-        hour_ts = em.timestamp.replace(minute=0, second=0, microsecond=0)
-        w = weather_avg.get(hour_ts, {})
-        eq_load = equipment_avg.get(hour_ts)
+        min_ts_key = _minute_key(em.timestamp)
+        w = weather_avg.get(min_ts_key, {})
+        eq_load = equipment_avg.get(min_ts_key)
 
         rows.append({
-            'hour': hour_ts,
+            'minute': min_ts_key,
             'voc_concentration': em.voc_concentration or 0,
             'temperature': w.get('temperature') or 0,
             'humidity': w.get('humidity') or 0,
@@ -112,7 +116,17 @@ def _build_feature_sequence():
             'operating_load': eq_load if eq_load is not None else 0,
         })
 
-    df = pd.DataFrame(rows).drop_duplicates(subset='hour').sort_values('hour').reset_index(drop=True)
+    df = pd.DataFrame(rows).drop_duplicates(subset='minute').sort_values('minute').reset_index(drop=True)
+
+    # 降采样至小时级用于 LSTM（取小时均值）
+    df['hour'] = pd.to_datetime(df['minute']).dt.floor('h')
+    df = df.groupby('hour').agg({
+        'voc_concentration': 'mean',
+        'temperature': 'mean',
+        'humidity': 'mean',
+        'wind_speed': 'mean',
+        'operating_load': 'mean',
+    }).reset_index()
 
     if len(df) < LOOKBACK + 6:
         return None, f"有效数据不足（当前 {len(df)} 条，需要至少 {LOOKBACK + 6} 条）"
@@ -147,26 +161,38 @@ def _build_feature_sequence():
     sequence = feature_data[-LOOKBACK:]
     return sequence, None
 
-# ---------- CSV 上传接口 ----------
-ALLOWED_EXTENSIONS = {'csv'}
+# ---------- 文件上传接口（支持 CSV + Excel）----------
+ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls'}
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/api/data/upload/csv', methods=['POST'])
-def upload_csv():
+
+def _read_dataframe(file, filename):
+    """根据文件扩展名读取 DataFrame"""
+    ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    if ext == 'csv':
+        return pd.read_csv(file)
+    else:
+        return pd.read_excel(file)
+
+
+@app.route('/api/data/upload', methods=['POST'])
+@app.route('/api/data/upload/csv', methods=['POST'])  # 兼容旧接口
+def upload_file():
     if 'file' not in request.files:
         return jsonify({'error': '缺少文件'}), 400
     file = request.files['file']
     data_type = request.form.get('data_type', '').lower()
     if file.filename == '' or not allowed_file(file.filename):
-        return jsonify({'error': '无效文件，仅支持 .csv'}), 400
+        return jsonify({'error': '无效文件，仅支持 .csv / .xlsx / .xls'}), 400
     if data_type not in ('emission', 'equipment', 'weather'):
         return jsonify({'error': '缺少或无效的 data_type，可选：emission, equipment, weather'}), 400
 
     try:
-        df = pd.read_csv(file)
+        df = _read_dataframe(file, file.filename)
         if df.empty:
-            return jsonify({'error': 'CSV 文件为空'}), 400
+            return jsonify({'error': '文件为空'}), 400
 
         if data_type == 'emission':
             value_cols = ['voc_concentration', 'nox_concentration', 'so2_concentration']
@@ -432,4 +458,12 @@ def report_export():
 
 
 if __name__ == '__main__':
+    # 启动时预热模型（避免首次请求冷启动超时）
+    print("[init] 预加载模型...")
+    try:
+        _ = _get_predictor()
+        _ = _get_scaler_and_cols()
+        print("[init] 模型预加载完成")
+    except Exception as e:
+        print(f"[init] 模型预加载跳过: {e}")
     app.run(host='0.0.0.0', port=5000, debug=True)
