@@ -1,13 +1,20 @@
 <template>
   <div class="chart-wrapper" :style="{ height }">
+    <!-- 骨架屏（加载态） -->
+    <SkeletonChart v-if="loading" :height="height" />
+
+    <!-- 图表（就绪态） -->
     <v-chart
-      v-if="!loading"
+      v-else
       :option="chartOption"
       autoresize
       ref="chartRef"
     />
-    <div v-else class="chart-loading">
-      <span>加载预测数据中...</span>
+
+    <!-- 错误态 -->
+    <div v-if="error" class="chart-error">
+      <span>⚠️ 图表加载失败</span>
+      <button class="chart-retry" @click="retry">重试</button>
     </div>
   </div>
 </template>
@@ -15,36 +22,62 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from "vue";
 import VChart from "vue-echarts";
-import "echarts";
+import SkeletonChart from "@/components/SkeletonChart.vue";
 import api from "@/utils/api";
 
+// ========== ECharts 按需引入 ==========
+import { use } from "echarts/core";
+import { CanvasRenderer } from "echarts/renderers";
+import { LineChart } from "echarts/charts";
+import {
+  GridComponent,
+  TooltipComponent,
+  LegendComponent,
+  MarkLineComponent,
+} from "echarts/components";
+
+use([
+  CanvasRenderer,
+  LineChart,
+  GridComponent,
+  TooltipComponent,
+  LegendComponent,
+  MarkLineComponent,
+]);
+
 const props = defineProps({
-  /** 阈值线数值，单位 mg/m³ */
   limit: { type: Number, default: 80 },
   limitColor: { type: String, default: "#ef4444" },
   height: { type: String, default: "100%" },
 });
 
 const chartRef = ref(null);
-
-// 内部数据
 const historyData = ref([]);
 const predictionData = ref([]);
 const loading = ref(true);
+const error = ref(false);
 
 // ========================
 // 获取预测数据
 // ========================
 const fetchData = async () => {
+  if (!error.value) loading.value = true;
   try {
     const res = await api.getPrediction();
     historyData.value = res.history || [];
     predictionData.value = res.prediction || [];
+    error.value = false;
   } catch (err) {
     console.error("[PredictionChart] 获取预测数据失败:", err);
+    error.value = true;
   } finally {
     loading.value = false;
   }
+};
+
+const retry = () => {
+  error.value = false;
+  fetchData();
 };
 
 // ========================
@@ -59,21 +92,17 @@ const chartOption = computed(() => {
   const predLen = prediction.length;
   const totalLen = historyLen + predLen;
 
-  // 1. x 轴：历史时间 + 预测时间
   const xAxisData = [
     ...history.map((d) => d.time),
     ...prediction.map((d) => d.time),
   ];
 
-  // 2. 历史浓度折线
   const historyValues = history.map((d) => d.value);
   historyValues.push(...new Array(predLen).fill(null));
 
-  // 3. 预测浓度折线（首段与历史连接处加 null）
   const predictionValues = new Array(historyLen).fill(null);
   predictionValues.push(...prediction.map((d) => d.value));
 
-  // 4. 连接线：历史最后一点 → 预测第一点（虚线）
   const connectorValues = new Array(totalLen).fill(null);
   if (historyLen > 0 && predLen > 0) {
     connectorValues[historyLen - 1] = history[historyLen - 1].value;
@@ -81,6 +110,11 @@ const chartOption = computed(() => {
   }
 
   return {
+    // 图表更新动画
+    animation: true,
+    animationDuration: 500,
+    animationEasing: "cubicOut",
+
     tooltip: {
       trigger: "axis",
       backgroundColor: "rgba(20, 28, 45, 0.92)",
@@ -168,10 +202,7 @@ const chartOption = computed(() => {
         symbol: "diamond",
         symbolSize: 7,
         connectNulls: true,
-        lineStyle: {
-          width: 3,
-          type: "dashed",
-        },
+        lineStyle: { width: 3, type: "dashed" },
         itemStyle: {
           color: (param) => (param.data > limitVal ? "#ef4444" : "#fbbf24"),
         },
@@ -197,11 +228,7 @@ const chartOption = computed(() => {
         connectNulls: true,
         symbol: "none",
         showSymbol: false,
-        lineStyle: {
-          color: "#8b98b0",
-          width: 2,
-          type: "dotted",
-        },
+        lineStyle: { color: "#8b98b0", width: 2, type: "dotted" },
         emphasis: { disabled: true },
         tooltip: { show: false },
       },
@@ -251,13 +278,30 @@ onUnmounted(() => clearInterval(timer));
   position: relative;
 }
 
-.chart-loading {
+.chart-error {
   width: 100%;
   height: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #576580;
+  gap: 12px;
+  color: #f87171;
   font-size: 14px;
+}
+
+.chart-retry {
+  padding: 6px 18px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.chart-retry:hover {
+  background: rgba(239, 68, 68, 0.25);
 }
 </style>

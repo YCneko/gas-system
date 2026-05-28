@@ -1,4 +1,13 @@
+# 浏览器兼容目标
+# Vue CLI 会根据此配置自动注入 polyfill
+
 > 1%
 last 2 versions
 not dead
 not ie 11
+
+# 额外适配的浏览器
+Firefox >= 78
+Chrome >= 64
+Edge >= 79
+Safari >= 12

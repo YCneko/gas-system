@@ -4,12 +4,12 @@
     <header class="header">
       <div class="header-left">
         <div class="logo-icon">
-          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
             <polyline points="9 22 9 12 15 12 15 22"></polyline>
           </svg>
         </div>
-        <div>
+        <div class="header-title-group">
           <h1 class="system-name">Gas System 监控看板</h1>
           <p class="subtitle">实时数据监测与预警</p>
         </div>
@@ -18,14 +18,14 @@
         <button class="export-btn" :disabled="exporting" @click="handleExport">
           {{ exporting ? "导出中..." : "📄 导出报告" }}
         </button>
-        <span class="status-badge">● 系统运行中</span>
+        <span class="status-badge">● 运行中</span>
         <span class="clock">{{ currentTime }}</span>
       </div>
     </header>
 
     <!-- ===== 主体内容 ===== -->
     <main class="main-content">
-      <!-- 左侧：4 张实时指标卡片 -->
+      <!-- 左侧：实时指标卡片 -->
       <section class="left-panel">
         <DataCard
           v-for="item in indicators"
@@ -39,7 +39,6 @@
 
       <!-- 右侧：预测图表 + 预警列表 -->
       <section class="right-panel">
-        <!-- 预测趋势图 -->
         <div class="panel chart-panel">
           <div class="panel-header">
             <h3>VOCs 浓度预测趋势</h3>
@@ -50,13 +49,9 @@
           </div>
         </div>
 
-        <!-- 预警信息列表 -->
         <div class="panel alert-panel">
           <div class="panel-header">
             <h3>预警信息列表</h3>
-            <span v-if="alertCount" class="alert-badge">
-              {{ alertCount }} 条预警
-            </span>
           </div>
           <div class="alert-container">
             <AlertList />
@@ -68,7 +63,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import DataCard from "@/components/DataCard.vue";
 import AlertList from "@/components/AlertList.vue";
 import PredictionChart from "@/components/PredictionChart.vue";
@@ -86,10 +81,10 @@ const indicators = ref([
 
 const latestUpdate = ref("加载中...");
 const currentTime = ref(new Date().toLocaleString());
-const alertCount = computed(() => 0); // 由 AlertList 自行管理
+const exporting = ref(false);
 
 // ========================
-// 轮询实时数据（每 5 秒）
+// 实时数据轮询（每 5 秒）
 // ========================
 const fetchRealtimeData = async () => {
   try {
@@ -112,26 +107,24 @@ const fetchRealtimeData = async () => {
 // ========================
 // 导出报告
 // ========================
-const exporting = ref(false);
-
 const handleExport = async () => {
   exporting.value = true;
   try {
-    const blob = await api.exportReport({
-      timestamp: Date.now(),
-    });
-    // 触发浏览器下载
+    const blob = await api.exportReport({ timestamp: Date.now() });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `Gas监控报告_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, "")}.csv`;
+    a.download = `Gas监控报告_${new Date()
+      .toISOString()
+      .slice(0, 19)
+      .replace(/[:-]/g, "")}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   } catch (err) {
     console.error("[Dashboard] 导出失败:", err);
-    alert("导出失败，请确认后端导出接口可用");
+    // 全局 Toast 已由 api.js 统一处理错误
   } finally {
     exporting.value = false;
   }
@@ -144,12 +137,10 @@ let clockTimer = null;
 let realtimeTimer = null;
 
 onMounted(() => {
-  // 系统时钟
   clockTimer = setInterval(() => {
     currentTime.value = new Date().toLocaleString();
   }, 1000);
 
-  // 实时数据 5 秒轮询
   fetchRealtimeData();
   realtimeTimer = setInterval(fetchRealtimeData, 5000);
 });
@@ -169,7 +160,7 @@ onUnmounted(() => {
 }
 
 .dashboard {
-  height: 100vh;
+  height: 100%;
   display: grid;
   grid-template-rows: auto 1fr;
   background: linear-gradient(135deg, #0a0f1a 0%, #0d1422 100%);
@@ -178,7 +169,9 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* ===== 顶部栏 ===== */
+/* =====================================
+   ===== 大屏 ≥1920px（默认） =====
+   ===================================== */
 .header {
   display: flex;
   justify-content: space-between;
@@ -189,12 +182,14 @@ onUnmounted(() => {
   border-bottom: 1px solid rgba(46, 123, 207, 0.2);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   z-index: 10;
+  flex-shrink: 0;
 }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: 16px;
+  min-width: 0;
 }
 
 .logo-icon {
@@ -207,6 +202,7 @@ onUnmounted(() => {
   justify-content: center;
   color: #fff;
   box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+  flex-shrink: 0;
 }
 
 .system-name {
@@ -217,6 +213,7 @@ onUnmounted(() => {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+  white-space: nowrap;
 }
 
 .subtitle {
@@ -229,6 +226,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 20px;
+  flex-shrink: 0;
 }
 
 .status-badge {
@@ -239,6 +237,7 @@ onUnmounted(() => {
   font-size: 14px;
   font-weight: 500;
   border: 1px solid rgba(16, 185, 129, 0.3);
+  white-space: nowrap;
 }
 
 .clock {
@@ -249,9 +248,9 @@ onUnmounted(() => {
   padding: 8px 18px;
   border-radius: 8px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-/* ===== 导出按钮 ===== */
 .export-btn {
   padding: 8px 20px;
   background: linear-gradient(135deg, #00d4ff, #009cbb);
@@ -262,13 +261,12 @@ onUnmounted(() => {
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.2s, transform 0.15s;
+  white-space: nowrap;
 }
-
 .export-btn:hover:not(:disabled) {
   opacity: 0.85;
   transform: translateY(-1px);
 }
-
 .export-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -280,17 +278,26 @@ onUnmounted(() => {
   grid-template-columns: 35% 65%;
   gap: 24px;
   padding: 24px 32px;
-  height: calc(100vh - 100px);
   min-height: 0;
+  overflow: hidden;
 }
 
 .left-panel {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
-/* ===== 面板容器 ===== */
+.right-panel {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 24px;
+  min-height: 0;
+}
+
+/* ===== 面板 ===== */
 .panel {
   background: rgba(18, 26, 46, 0.6);
   backdrop-filter: blur(6px);
@@ -298,6 +305,9 @@ onUnmounted(() => {
   border: 1px solid rgba(46, 123, 207, 0.15);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .panel-header {
@@ -307,6 +317,7 @@ onUnmounted(() => {
   padding: 18px 22px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   background: rgba(255, 255, 255, 0.02);
+  flex-shrink: 0;
 }
 
 .panel-header h3 {
@@ -320,28 +331,15 @@ onUnmounted(() => {
   color: #576580;
 }
 
-.alert-badge {
-  font-size: 12px;
-  color: #e6a23c;
-  background: rgba(230, 162, 60, 0.12);
-  padding: 3px 12px;
-  border-radius: 12px;
-}
-
-.right-panel {
-  display: grid;
-  grid-template-rows: 1fr 1fr;
-  gap: 24px;
-  min-height: 0;
-}
-
 .chart-panel .chart-container {
-  height: calc(100% - 56px);
+  flex: 1;
+  min-height: 0;
   padding: 4px 16px 12px;
 }
 
 .alert-panel .alert-container {
-  height: calc(100% - 56px);
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -356,14 +354,178 @@ onUnmounted(() => {
   border-radius: 10px;
 }
 
-/* ===== 响应式 ===== */
-@media (max-width: 1200px) {
+/* =====================================
+   ===== 笔记本 1366-1919px =====
+   ===================================== */
+@media (max-width: 1919px) {
+  .header {
+    padding: 14px 24px;
+  }
+
+  .system-name {
+    font-size: 22px;
+  }
+
+  .header-right {
+    gap: 14px;
+  }
+
+  .status-badge {
+    padding: 4px 12px;
+    font-size: 13px;
+  }
+
+  .clock {
+    font-size: 14px;
+    padding: 6px 14px;
+  }
+
+  .export-btn {
+    padding: 6px 16px;
+    font-size: 13px;
+  }
+
+  .main-content {
+    grid-template-columns: 30% 70%;
+    gap: 20px;
+    padding: 20px 24px;
+  }
+
+  .left-panel {
+    gap: 14px;
+  }
+
+  .right-panel {
+    gap: 20px;
+  }
+
+  .panel-header {
+    padding: 14px 18px;
+  }
+
+  .panel-header h3 {
+    font-size: 14px;
+  }
+
+  .chart-panel .chart-container {
+    padding: 2px 12px 10px;
+  }
+}
+
+/* =====================================
+   ===== 小屏 ≤1365px =====
+   ===================================== */
+@media (max-width: 1365px) {
+  .header {
+    padding: 10px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-title-group {
+    min-width: 0;
+  }
+
+  .system-name {
+    font-size: 18px;
+    white-space: normal;
+    -webkit-text-fill-color: #fff;
+    background: none;
+  }
+
+  .subtitle {
+    font-size: 12px;
+  }
+
+  .logo-icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  .logo-icon svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .header-right {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .status-badge {
+    font-size: 12px;
+    padding: 3px 10px;
+  }
+
+  .clock {
+    font-size: 13px;
+    padding: 4px 12px;
+  }
+
+  .export-btn {
+    font-size: 12px;
+    padding: 5px 14px;
+  }
+
   .main-content {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
+    gap: 16px;
+    padding: 16px;
   }
+
+  /* 4 张卡片排成 2×2 网格 */
+  .left-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    overflow: visible;
+  }
+
   .right-panel {
-    grid-template-rows: 300px 300px;
+    grid-template-rows: 280px 240px;
+    gap: 16px;
+  }
+
+  .panel-header {
+    padding: 12px 16px;
+  }
+
+  .panel-header h3 {
+    font-size: 13px;
+  }
+
+  .panel-meta {
+    font-size: 12px;
+  }
+
+  .chart-panel .chart-container {
+    padding: 0 8px 8px;
+  }
+
+  .alert-container {
+    font-size: 13px;
+  }
+
+  th,
+  td {
+    padding: 8px 10px;
+  }
+}
+
+/* 极小屏处理 */
+@media (max-width: 768px) {
+  .left-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .right-panel {
+    grid-template-rows: 240px 220px;
+  }
+
+  .header-right .status-badge,
+  .header-right .clock {
+    display: none;
   }
 }
 </style>

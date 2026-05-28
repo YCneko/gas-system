@@ -1,6 +1,5 @@
 <template>
   <div class="alert-list">
-    <!-- 表格 -->
     <table class="alert-table">
       <thead>
         <tr>
@@ -11,25 +10,26 @@
         </tr>
       </thead>
       <tbody>
-        <tr
-          v-for="(alert, index) in sortedAlerts"
-          :key="alert.id || index"
-          :class="{ 'row-new': alert._isNew }"
-          @click="openDetail(alert)"
-        >
-          <td>{{ alert.time }}</td>
-          <td>{{ alert.metric }}</td>
-          <td>
-            <span :class="['level-badge', alert.level]">
-              {{ levelText(alert.level) }}
-            </span>
-          </td>
-          <td class="detail-cell">{{ alert.detail }}</td>
-        </tr>
+        <TransitionGroup name="alert-row" tag="tbody">
+          <tr
+            v-for="(alert, index) in sortedAlerts"
+            :key="alert.id || alert.time + alert.metric + index"
+            :class="{ 'row-new': alert._isNew }"
+            @click="openDetail(alert)"
+          >
+            <td>{{ alert.time }}</td>
+            <td>{{ alert.metric }}</td>
+            <td>
+              <span :class="['level-badge', alert.level]">
+                {{ levelText(alert.level) }}
+              </span>
+            </td>
+            <td class="detail-cell">{{ alert.detail }}</td>
+          </tr>
+        </TransitionGroup>
       </tbody>
     </table>
 
-    <!-- 空状态 -->
     <div v-if="!sortedAlerts.length" class="empty-state">
       <span>暂无预警信息 ✅</span>
     </div>
@@ -80,8 +80,6 @@ import api from "@/utils/api";
 const list = ref([]);
 const showDetail = ref(false);
 const currentAlert = ref(null);
-
-// 记录已见过的预警 ID，用于判断新预警
 const knownIds = ref(new Set());
 
 // ========================
@@ -92,7 +90,6 @@ const fetchAlerts = async () => {
     const data = await api.getAlertList();
     const newList = Array.isArray(data) ? data : [];
 
-    // 标记新增的预警（_isNew）并触发浏览器通知
     newList.forEach((item) => {
       const id = item.id ?? item.time + item.metric;
       if (!knownIds.value.has(id) && item.level !== "normal") {
@@ -121,7 +118,7 @@ const sendNotification = (alert) => {
       tag: alert.id || alert.time + alert.metric,
     });
   } catch (e) {
-    // Notification API 不支持时静默失败
+    // Notification API 不支持时静默
   }
 };
 
@@ -138,7 +135,7 @@ const closeDetail = () => {
 };
 
 // ========================
-// 按时间降序排列
+// 排序
 // ========================
 const sortedAlerts = computed(() => {
   return [...list.value].sort((a, b) =>
@@ -147,7 +144,7 @@ const sortedAlerts = computed(() => {
 });
 
 // ========================
-// 预警级别 → 中文文本
+// 级别文本
 // ========================
 const levelText = (level) => {
   const map = {
@@ -162,11 +159,10 @@ const levelText = (level) => {
 };
 
 // ========================
-// 生命周期：10 秒轮询
+// 生命周期
 // ========================
 let timer = null;
 onMounted(() => {
-  // 请求通知权限
   if ("Notification" in window && Notification.permission === "default") {
     Notification.requestPermission();
   }
@@ -218,20 +214,6 @@ tr:hover {
   background: rgba(0, 212, 255, 0.06);
 }
 
-/* 新预警闪烁动画 */
-.row-new {
-  animation: row-flash 2s ease-out;
-}
-
-@keyframes row-flash {
-  0% {
-    background: rgba(239, 68, 68, 0.35);
-  }
-  100% {
-    background: transparent;
-  }
-}
-
 .detail-cell {
   max-width: 220px;
 }
@@ -246,31 +228,66 @@ tr:hover {
   font-size: 12px;
   font-weight: 500;
 }
-
 .level-badge.critical,
 .level-badge.error {
   background: rgba(245, 108, 108, 0.15);
   color: #f56c6c;
   border: 1px solid rgba(245, 108, 108, 0.3);
 }
-
 .level-badge.warn,
 .level-badge.warning {
   background: rgba(230, 162, 60, 0.15);
   color: #e6a23c;
   border: 1px solid rgba(230, 162, 60, 0.3);
 }
-
 .level-badge.normal {
   background: rgba(16, 185, 129, 0.15);
   color: #10b981;
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
-
 .level-badge.info {
   background: rgba(64, 158, 255, 0.15);
   color: #409eff;
   border: 1px solid rgba(64, 158, 255, 0.3);
+}
+
+/* ---------- 新条目滑入动画 ---------- */
+.row-new {
+  animation: slide-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slide-in {
+  0% {
+    transform: translateX(60px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* TransitionGroup 动画 */
+.alert-row-enter-active {
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.alert-row-leave-active {
+  transition: all 0.3s ease-in;
+}
+
+.alert-row-enter-from {
+  transform: translateX(80px);
+  opacity: 0;
+}
+
+.alert-row-leave-to {
+  transform: translateX(-40px);
+  opacity: 0;
+}
+
+.alert-row-move {
+  transition: transform 0.3s ease;
 }
 
 /* ---------- 空状态 ---------- */
@@ -310,7 +327,6 @@ tr:hover {
   padding: 18px 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
-
 .modal-header h3 {
   font-size: 16px;
   font-weight: 600;
@@ -326,7 +342,6 @@ tr:hover {
   padding: 0 4px;
   line-height: 1;
 }
-
 .modal-close:hover {
   color: #e0e6f0;
 }
@@ -341,19 +356,16 @@ tr:hover {
   margin-bottom: 14px;
   align-items: baseline;
 }
-
 .detail-row .label {
   color: #6b7a94;
   min-width: 50px;
   font-size: 14px;
   flex-shrink: 0;
 }
-
 .detail-row .value {
   color: #e0e6f0;
   font-size: 14px;
 }
-
 .detail-full .value {
   line-height: 1.6;
   word-break: break-word;
@@ -375,7 +387,6 @@ tr:hover {
   cursor: pointer;
   transition: opacity 0.2s;
 }
-
 .btn-close:hover {
   opacity: 0.85;
 }
