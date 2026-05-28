@@ -290,5 +290,136 @@ def vocs_prediction():
         }), 500
 
 
+# ---------- 前端兼容接口: GET /api/prediction ----------
+@app.route('/api/prediction', methods=['GET'])
+def prediction():
+    """返回历史24小时 + 未来6小时预测数据（供 PredictionChart 使用）"""
+    try:
+        from sqlalchemy import desc
+
+        records = (EmissionData.query
+                   .order_by(desc(EmissionData.timestamp))
+                   .limit(30).all())
+        records = sorted(records, key=lambda r: r.timestamp)
+
+        history = [
+            {'time': r.timestamp.strftime('%m/%d %H:%M'), 'value': round(r.voc_concentration, 1)}
+            for r in records[-24:] if r.voc_concentration is not None
+        ]
+
+        # 尝试预测，失败则返回空
+        prediction = []
+        try:
+            sequence, _ = _build_feature_sequence()
+            if sequence is not None:
+                predictor = _get_predictor()
+                pred_result = predictor.predict(sequence)
+                if not pred_result.get('error'):
+                    last_ts = records[-1].timestamp if records else datetime.utcnow()
+                    for i, v in enumerate(pred_result['predictions']):
+                        future_ts = last_ts + pd.Timedelta(hours=i + 1)
+                        prediction.append({
+                            'time': future_ts.strftime('%m/%d %H:%M'),
+                            'value': round(v, 1),
+                        })
+        except Exception:
+            pass
+
+        return jsonify({'history': history, 'prediction': prediction}), 200
+
+    except Exception as e:
+        return jsonify({'error': True, 'message': str(e)}), 500
+
+
+# ---------- 前端兼容接口: GET /api/realtime ----------
+@app.route('/api/realtime', methods=['GET'])
+def realtime():
+    """返回最新的实时监测数据（供 DataCard 使用）"""
+    try:
+        from sqlalchemy import desc
+
+        latest_em = EmissionData.query.order_by(desc(EmissionData.timestamp)).first()
+        latest_weather = WeatherData.query.order_by(desc(WeatherData.timestamp)).first()
+
+        return jsonify({
+            'voc': round(latest_em.voc_concentration, 1) if latest_em and latest_em.voc_concentration else 0,
+            'temp': round(latest_weather.temperature, 1) if latest_weather and latest_weather.temperature else 0,
+            'humidity': round(latest_weather.humidity, 1) if latest_weather and latest_weather.humidity else 0,
+            'wind': round(latest_weather.wind_speed, 1) if latest_weather and latest_weather.wind_speed else 0,
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': True, 'message': str(e)}), 500
+
+
+# ---------- 前端兼容接口: GET /api/alerts ----------
+@app.route('/api/alerts', methods=['GET'])
+def alerts():
+    """返回预警记录列表（供 AlertList 使用）"""
+    try:
+        from sqlalchemy import desc
+        from models import AlertRecord
+
+        records = AlertRecord.query.order_by(desc(AlertRecord.alert_timestamp)).limit(50).all()
+
+        level_map = {'高': 'error', '中': 'warn', '低': 'info'}
+
+        result = []
+        for r in records:
+            result.append({
+                'id': r.id,
+                'time': r.alert_timestamp.strftime('%m/%d %H:%M') if r.alert_timestamp else '',
+                'metric': 'VOCs浓度',
+                'level': level_map.get(r.alert_level, 'info'),
+                'detail': f"预测超标时间: {r.predicted_exceedance_time.strftime('%m/%d %H:%M') if r.predicted_exceedance_time else ''}, 预测值: {r.predicted_value} mg/m³",
+            })
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({'error': True, 'message': str(e)}), 500
+
+
+# ---------- 前端兼容接口: GET /api/report/export ----------
+@app.route('/api/report/export', methods=['GET'])
+def report_export():
+    """导出 CSV 报告（历史排放 + 气象数据）"""
+    import io
+    import csv
+
+    try:
+        from sqlalchemy import desc
+
+        records = (EmissionData.query
+                   .order_by(desc(EmissionData.timestamp))
+                   .limit(500).all())
+        records = sorted(records, key=lambda r: r.timestamp)
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['时间', 'VOCs浓度(mg/m³)', 'NOx浓度(mg/m³)', 'SO2浓度(mg/m³)'])
+
+        for r in records:
+            writer.writerow([
+                r.timestamp.strftime('%Y-%m-%d %H:%M:%S') if r.timestamp else '',
+                r.voc_concentration or '',
+                r.nox_concentration or '',
+                r.so2_concentration or '',
+            ])
+
+        csv_content = output.getvalue()
+        output.close()
+
+        from flask import Response
+        return Response(
+            csv_content,
+            mimetype='text/csv',
+            headers={'Content-Disposition': 'attachment; filename=gas_report.csv'},
+        )
+
+    except Exception as e:
+        return jsonify({'error': True, 'message': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(debug=True)
