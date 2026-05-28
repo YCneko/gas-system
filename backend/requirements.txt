@@ -16,7 +16,8 @@ SQLAlchemy==2.0.49
 typing_extensions==4.15.0
 tzdata==2026.2
 Werkzeug==3.1.8
-tensorflow==2.18.0
+cryptography>=41.0.0
+tensorflow>=2.20.0
 scikit-learn==1.6.1
 matplotlib==3.10.0
 seaborn==0.13.2
