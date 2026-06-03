@@ -89,6 +89,22 @@ const api = {
       responseType: "blob",
     });
   },
+
+  /**
+   * 上传数据文件（CSV / Excel）
+   * @param {File} file - 文件对象
+   * @param {string} dataType - 数据类型: emission | weather | equipment
+   * @returns {Promise<{ message: string, imported_rows: number, before_completeness: number, after_completeness: number }>}
+   */
+  uploadData(file, dataType) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("data_type", dataType);
+    return service.post("/data/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30000,
+    });
+  },
 };
 
 export default api;

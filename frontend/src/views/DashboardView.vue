@@ -15,6 +15,9 @@
         </div>
       </div>
       <div class="header-right">
+        <button class="import-btn" @click="showUpload = true">
+          📥 导入数据
+        </button>
         <button class="export-btn" :disabled="exporting" @click="handleExport">
           {{ exporting ? "导出中..." : "📄 导出报告" }}
         </button>
@@ -59,6 +62,13 @@
         </div>
       </section>
     </main>
+
+    <!-- 数据导入弹窗 -->
+    <DataUpload
+      :visible="showUpload"
+      @close="showUpload = false"
+      @uploaded="onDataUploaded"
+    />
   </div>
 </template>
 
@@ -67,7 +77,9 @@ import { ref, onMounted, onUnmounted } from "vue";
 import DataCard from "@/components/DataCard.vue";
 import AlertList from "@/components/AlertList.vue";
 import PredictionChart from "@/components/PredictionChart.vue";
+import DataUpload from "@/components/DataUpload.vue";
 import api from "@/utils/api";
+import { showToast } from "@/utils/globalState";
 
 // ========================
 // 实时指标数据
@@ -82,6 +94,16 @@ const indicators = ref([
 const latestUpdate = ref("加载中...");
 const currentTime = ref(new Date().toLocaleString());
 const exporting = ref(false);
+const showUpload = ref(false);
+
+// ========================
+// 数据导入成功回调
+// ========================
+const onDataUploaded = (res) => {
+  showToast("数据导入成功：" + res.imported_rows + " 条记录", "success");
+  showUpload.value = false;
+  fetchRealtimeData();
+};
 
 // ========================
 // 实时数据轮询（每 5 秒）
@@ -249,6 +271,23 @@ onUnmounted(() => {
   border-radius: 8px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.import-btn {
+  padding: 8px 20px;
+  background: rgba(46, 123, 207, 0.15);
+  color: #00d4ff;
+  border: 1px solid rgba(46, 123, 207, 0.3);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.import-btn:hover {
+  background: rgba(46, 123, 207, 0.25);
+  border-color: #00d4ff;
 }
 
 .export-btn {
