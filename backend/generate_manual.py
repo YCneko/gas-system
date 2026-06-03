@@ -1,46 +1,44 @@
-"""将使用手册生成为 Word 文档"""
+"""生成专业风格的系统使用手册 Word 文档"""
 from docx import Document
 from docx.shared import Inches, Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.style import WD_STYLE_TYPE
 from docx.oxml.ns import qn
-import re
 
 
 doc = Document()
 
-# ===== 页面设置 =====
 for section in doc.sections:
     section.top_margin = Cm(2.5)
     section.bottom_margin = Cm(2.5)
-    section.left_margin = Cm(2.5)
-    section.right_margin = Cm(2.5)
+    section.left_margin = Cm(2.8)
+    section.right_margin = Cm(2.8)
 
-# ===== 样式定义 =====
 style = doc.styles['Normal']
 style.font.name = '微软雅黑'
 style.font.size = Pt(11)
-style.paragraph_format.line_spacing = 1.5
+style.paragraph_format.line_spacing = 1.4
 style.element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
 
 for level in range(1, 4):
-    h_style = doc.styles[f'Heading {level}']
-    h_style.font.name = '微软雅黑'
-    h_style.element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+    h = doc.styles[f'Heading {level}']
+    h.font.name = '微软雅黑'
+    h.element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
     if level == 1:
-        h_style.font.size = Pt(18)
-        h_style.font.color.rgb = RGBColor(0, 51, 102)
+        h.font.size = Pt(16)
+        h.font.color.rgb = RGBColor(0, 51, 102)
+        h.paragraph_format.space_before = Pt(24)
     elif level == 2:
-        h_style.font.size = Pt(14)
-        h_style.font.color.rgb = RGBColor(0, 80, 140)
+        h.font.size = Pt(13)
+        h.font.color.rgb = RGBColor(0, 70, 130)
+        h.paragraph_format.space_before = Pt(18)
     else:
-        h_style.font.size = Pt(12)
-        h_style.font.color.rgb = RGBColor(60, 60, 60)
+        h.font.size = Pt(11.5)
+        h.font.color.rgb = RGBColor(50, 50, 50)
 
 
-def add_para(text, bold=False, size=11, color=None, align=None, space_after=6):
-    p = doc.add_paragraph()
-    run = p.add_run(text)
+def p(text, bold=False, size=11, color=None, align=None, indent=None):
+    para = doc.add_paragraph()
+    run = para.add_run(text)
     run.font.name = '微软雅黑'
     run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
     run.font.size = Pt(size)
@@ -48,511 +46,488 @@ def add_para(text, bold=False, size=11, color=None, align=None, space_after=6):
     if color:
         run.font.color.rgb = RGBColor(*color)
     if align is not None:
-        p.alignment = align
-    p.paragraph_format.space_after = Pt(space_after)
-    return p
+        para.alignment = align
+    if indent:
+        para.paragraph_format.left_indent = Cm(indent)
+    para.paragraph_format.space_after = Pt(4)
+    return para
 
 
-def add_code(text):
-    """添加代码块 (灰色背景, 等宽字体)"""
-    p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(6)
-    p.paragraph_format.space_after = Pt(6)
-    p.paragraph_format.left_indent = Cm(0.5)
-    # 灰色背景
-    shading_elm = p._element.get_or_add_pPr()
-    shd = shading_elm.makeelement(qn('w:shd'), {
-        qn('w:val'): 'clear',
-        qn('w:color'): 'auto',
-        qn('w:fill'): 'F0F0F0',
+def gap():
+    doc.add_paragraph().paragraph_format.space_after = Pt(4)
+
+
+def code(text):
+    para = doc.add_paragraph()
+    para.paragraph_format.space_before = Pt(4)
+    para.paragraph_format.space_after = Pt(4)
+    para.paragraph_format.left_indent = Cm(0.6)
+    shd = para._element.get_or_add_pPr().makeelement(qn('w:shd'), {
+        qn('w:val'): 'clear', qn('w:color'): 'auto', qn('w:fill'): 'F0F0F0',
     })
-    shading_elm.append(shd)
-    run = p.add_run(text)
+    para._element.get_or_add_pPr().append(shd)
+    run = para.add_run(text)
     run.font.name = 'Consolas'
     run.font.size = Pt(9)
-    return p
+    return para
 
 
-def add_table(headers, rows, col_widths=None):
-    """添加带格式的表格"""
-    table = doc.add_table(rows=1 + len(rows), cols=len(headers))
-    table.style = 'Light Grid Accent 1'
-    # 表头
-    for j, h in enumerate(headers):
-        cell = table.rows[0].cells[j]
-        cell.text = h
-        for p in cell.paragraphs:
-            for run in p.runs:
-                run.bold = True
-                run.font.size = Pt(10)
-                run.font.name = '微软雅黑'
-                run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
-    # 数据行
+def table(headers, rows, widths=None):
+    t = doc.add_table(rows=1 + len(rows), cols=len(headers))
+    t.style = 'Light Grid Accent 1'
+    for j, hdr in enumerate(headers):
+        cell = t.rows[0].cells[j]
+        cell.text = hdr
+        for pr in cell.paragraphs:
+            for rn in pr.runs:
+                rn.bold = True
+                rn.font.size = Pt(10)
+                rn.font.name = '微软雅黑'
+                rn._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
     for i, row in enumerate(rows):
         for j, val in enumerate(row):
-            cell = table.rows[i + 1].cells[j]
+            cell = t.rows[i + 1].cells[j]
             cell.text = str(val)
-            for p in cell.paragraphs:
-                for run in p.runs:
-                    run.font.size = Pt(10)
-                    run.font.name = '微软雅黑'
-                    run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
-    doc.add_paragraph()  # spacing
-    return table
+            for pr in cell.paragraphs:
+                for rn in pr.runs:
+                    rn.font.size = Pt(10)
+                    rn.font.name = '微软雅黑'
+                    rn._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+    gap()
+    return t
 
 
-def add_tip(text):
-    """添加提示框"""
-    p = doc.add_paragraph()
-    shading_elm = p._element.get_or_add_pPr()
-    shd = shading_elm.makeelement(qn('w:shd'), {
-        qn('w:val'): 'clear',
-        qn('w:color'): 'auto',
-        qn('w:fill'): 'E8F5E9',
-    })
-    shading_elm.append(shd)
-    run = p.add_run(f'💡 {text}')
+def note(text):
+    para = doc.add_paragraph()
+    para._element.get_or_add_pPr().append(
+        para._element.get_or_add_pPr().makeelement(qn('w:shd'), {
+            qn('w:val'): 'clear', qn('w:color'): 'auto', qn('w:fill'): 'E8F5E9',
+        }))
+    run = para.add_run(text)
     run.font.name = '微软雅黑'
     run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
     run.font.size = Pt(10)
-    p.paragraph_format.left_indent = Cm(0.5)
-    return p
+    para.paragraph_format.left_indent = Cm(0.6)
+    para.paragraph_format.space_after = Pt(4)
+    return para
 
 
-def add_warning(text):
-    """添加警告框"""
-    p = doc.add_paragraph()
-    shading_elm = p._element.get_or_add_pPr()
-    shd = shading_elm.makeelement(qn('w:shd'), {
-        qn('w:val'): 'clear',
-        qn('w:color'): 'auto',
-        qn('w:fill'): 'FFF3E0',
-    })
-    shading_elm.append(shd)
-    run = p.add_run(f'⚠️ {text}')
-    run.font.name = '微软雅黑'
-    run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
-    run.font.size = Pt(10)
-    p.paragraph_format.left_indent = Cm(0.5)
-    return p
-
-
-def add_page_break():
+def page_break():
     doc.add_page_break()
 
 
-# ============================================================
-# 封面
-# ============================================================
-for _ in range(6):
-    doc.add_paragraph()
+# ===================== 封面 =====================
+for _ in range(7):
+    gap()
+p('Gas System', bold=True, size=32, color=(0, 51, 102), align=WD_ALIGN_PARAGRAPH.CENTER)
+p('面向化工园区的多源废气智能治理系统', size=16, color=(80, 80, 80), align=WD_ALIGN_PARAGRAPH.CENTER)
+gap()
+p('系统使用手册', size=14, color=(120, 120, 120), align=WD_ALIGN_PARAGRAPH.CENTER)
+gap()
+gap()
+p('版本 3.1 | 2026年6月', size=11, color=(150, 150, 150), align=WD_ALIGN_PARAGRAPH.CENTER)
+page_break()
 
-add_para('Gas System', bold=True, size=36, color=(0, 51, 102), align=WD_ALIGN_PARAGRAPH.CENTER, space_after=12)
-add_para('面向化工园区的多源废气智能治理系统', size=18, color=(80, 80, 80), align=WD_ALIGN_PARAGRAPH.CENTER, space_after=24)
-add_para('— 使用手册 —', size=14, color=(120, 120, 120), align=WD_ALIGN_PARAGRAPH.CENTER, space_after=48)
-add_para('零基础可用 | 10分钟上手', size=12, color=(100, 100, 100), align=WD_ALIGN_PARAGRAPH.CENTER, space_after=36)
-add_para('版本 3.0 | 2026年6月', size=11, color=(150, 150, 150), align=WD_ALIGN_PARAGRAPH.CENTER)
-
-add_page_break()
-
-# ============================================================
-# 新手必读
-# ============================================================
-doc.add_heading('新手必读', level=1)
-
-add_para('这份手册写给完全零基础的用户。你不需要懂编程知识，只要会：')
-add_para('① 用浏览器打开网页')
-add_para('② 在黑色命令窗口里复制粘贴文字')
-add_para('③ 按回车键执行')
-doc.add_paragraph()
-
-add_para('这个系统是做什么的？', bold=True, size=14, color=(0, 51, 102))
-add_para('一句话概括：帮化工厂的环保管理人员预测废气会不会超标。系统会自动做三件事：')
-add_para('收集数据 — 把废气浓度、天气、设备运转情况自动汇总到一起')
-add_para('预测未来 — 告诉你接下来 6 小时废气浓度会不会超标')
-add_para('弹窗报警 — 如果真的快超标了，马上弹出警告提醒你')
-doc.add_paragraph()
-
-add_para('运行起来长什么样？', bold=True, size=14, color=(0, 51, 102))
-add_para('最终你会看到这样一个网页：左侧有 4 个数据卡片（VOCs浓度、温度、湿度、风速），右侧上方是蓝黄相间的预测趋势图，右侧下方是预警列表。整体深色背景，类似数据大屏。')
-doc.add_paragraph()
-
-add_para('你需要准备什么？', bold=True, size=14, color=(0, 51, 102))
-add_para('只需要一台能联网的 Windows 电脑。下面会一步步教你。')
-add_page_break()
-
-# ============================================================
-# 方式一
-# ============================================================
-doc.add_heading('方式一：Docker 一键部署（推荐，最简单）', level=1)
-
-add_tip('适用人群：完全零基础，想最快看到效果的用户。首次约 15 分钟（主要是下载时间），之后每次只需 30 秒。')
-
-# 1.1
-doc.add_heading('第 1 步：安装 Docker Desktop', level=2)
-add_para('Docker 就像一个"箱子"，把整个系统打包进去，你不需要单独装 Python、MySQL 等任何东西。')
-doc.add_paragraph()
-add_para('操作步骤：', bold=True)
-add_para('1. 打开浏览器，访问：https://www.docker.com/products/docker-desktop/')
-add_para('2. 点击页面中间的蓝色大按钮 "Download Docker Desktop"')
-add_para('3. 下载完成后，双击安装文件（文件名类似 Docker Desktop Installer.exe）')
-add_para('4. 一路点"下一步" → "安装" → "完成"，全部用默认选项即可')
-add_para('5. 安装完成后，桌面上会出现一个鲸鱼图标 🐳，双击打开它')
-add_para('6. 第一次打开会要求注册账号，点 "Sign up" 用邮箱注册一个免费账号')
-add_para('7. 注册完登录，等鲸鱼图标右下角变成绿色，就说明 Docker 启动好了')
-doc.add_paragraph()
-add_para('验证安装是否成功：', bold=True)
-add_para('按键盘 Win+R，输入 cmd 回车，在黑色窗口里输入：')
-add_code('docker --version')
-add_para('如果显示类似 "Docker version 29.x.x"，说明安装成功。')
-
-# 1.2
-doc.add_heading('第 2 步：打开命令窗口', level=2)
-add_para('1. 按键盘 Win + R，输入 cmd，点确定')
-add_para('2. 一个黑色窗口会打开 — 这就是"命令提示符"，你只需要在里面复制粘贴命令即可')
-add_para('3. 粘贴的快捷键是 Ctrl+V（或者右键 → 粘贴）')
-
-# 1.3
-doc.add_heading('第 3 步：进入项目目录', level=2)
-add_para('把下面这行复制到黑色窗口里，按回车：')
-add_code('cd /d "e:\\文件\\大二下作业\\Gas System"')
-
-# 1.4
-doc.add_heading('第 4 步：一键启动', level=2)
-add_para('复制下面这条命令，粘贴到黑色窗口，按回车：')
-add_code('docker-compose up -d --build')
-add_warning('首次启动需要等待 5-15 分钟（取决于网速），因为它要下载约 500MB 的文件。屏幕上会有很多文字滚动，这是正常的。')
-add_para('当看到类似下面的文字时，说明启动成功：')
-add_code('Container gas_mysql    Started\nContainer gas_backend  Started\nContainer gas_frontend Started')
-
-# 1.5
-doc.add_heading('第 5 步：确认系统在运行', level=2)
-add_para('在黑色窗口输入：')
-add_code('docker ps')
-add_para('你应该看到三个容器都在 "Up" 状态。只要都能看到，就说明一切正常！')
-
-# 1.6
-doc.add_heading('第 6 步：打开浏览器看效果', level=2)
-add_para('1. 打开你电脑上的浏览器（Chrome、Edge、Firefox 随便哪个）')
-add_para('2. 在地址栏输入：http://localhost')
-add_para('3. 按回车')
-doc.add_paragraph()
-add_tip('看到深色背景的监控大屏，左边有 4 个数据卡片，右边有预测曲线图，说明部署成功！')
-
-# 日常使用
-doc.add_heading('以后怎么用？', level=2)
-add_table(
-    ['操作', '命令/方法'],
+# ===================== 1 系统概述 =====================
+doc.add_heading('1. 系统概述', level=1)
+p('Gas System 是一套面向化工园区的废气智能治理系统，集成多源数据融合、VOCs 浓度预测、可视化监控三大核心能力。')
+gap()
+p('核心模块：', bold=True)
+table(
+    ['模块', '功能', '技术实现'],
     [
-        ['启动系统', '打开 Docker Desktop（鲸鱼图标变绿），然后重复第 2-4 步'],
-        ['停止系统', '在命令窗口执行：docker-compose down'],
-        ['完全退出', '打开 Docker Desktop → 右上角设置 → Quit Docker Desktop'],
+        ['数据融合', '多源异构数据接入、清洗、分钟级时序对齐、结构化存储', 'Flask + PyMySQL + pandas'],
+        ['VOCs 预测', '基于 LSTM 时序模型的未来 6 小时浓度趋势预测', 'TensorFlow 2.21 + Keras'],
+        ['预警引擎', '超标自动检测、三级分级告警、数据库持久化', 'Flask + MySQL'],
+        ['监控看板', '实时指标卡片、预测曲线图、预警列表一体化展示', 'Vue 3 + ECharts + Nginx'],
+        ['报告导出', '历史排放数据 CSV 导出', 'Flask Response'],
     ]
 )
 
-add_page_break()
+p('系统架构：四层结构，前后端分离，容器化部署。', bold=True)
+code(
+    '表现层 (Vue.js + ECharts)         http://localhost (Nginx :80)\n'
+    '业务层 (Flask RESTful API)        http://localhost:5000\n'
+    '数据层 (TensorFlow + MySQL)       MySQL :3306\n'
+    '部署层 (Docker + docker-compose)   一键编排'
+)
+page_break()
 
-# ============================================================
-# 方式二
-# ============================================================
-doc.add_heading('方式二：不用 Docker，手动启动（备选）', level=1)
+# ===================== 2 部署 =====================
+doc.add_heading('2. 系统部署', level=1)
+p('系统支持两种部署方式：Docker 容器化部署（推荐）和手动部署。')
 
-add_tip('适用人群：电脑上已经有 Python 3.10+ 和 MySQL 8.0 的用户。首次约 20 分钟。')
+doc.add_heading('2.1 Docker 部署（推荐）', level=2)
 
-doc.add_heading('前置准备：安装 Python', level=2)
-add_para('如果你还没有安装 Python：')
-add_para('1. 打开浏览器，访问：https://www.python.org/downloads/')
-add_para('2. 页面会自动识别你的系统，点击黄色大按钮 "Download Python"')
-add_para('3. 下载完成后双击安装')
-add_warning('安装界面的最下面有个勾选框 "Add Python to PATH"，一定要勾上！否则后面命令无法识别 python 命令。')
-add_para('4. 点 "Install Now"，等待安装完成')
-doc.add_paragraph()
-add_para('验证：', bold=True)
-add_code('python --version')
-add_para('显示 "Python 3.x.x" 就说明安装成功。')
+p('前置条件：', bold=True)
+p('安装 Docker Desktop（https://www.docker.com/products/docker-desktop），启动后确认引擎正常运行：')
+code('docker --version')
+gap()
 
-doc.add_heading('前置准备：安装 MySQL', level=2)
-add_para('1. 访问 https://dev.mysql.com/downloads/installer/')
-add_para('2. 下载 mysql-installer-community（约 400MB）')
-add_para('3. 双击安装，选择 "Developer Default"，一路下一步')
-add_para('4. 在设置 root 密码时，设置为：123456')
-add_para('5. 安装完成后，打开 MySQL 命令行，执行：')
-add_code('CREATE DATABASE IF NOT EXISTS gas_system CHARACTER SET utf8mb4;')
+p('部署步骤：', bold=True)
+p('步骤 1 — 进入项目根目录：')
+code('cd /d "e:\\文件\\大二下作业\\Gas System"')
+p('步骤 2 — 构建并启动所有服务：')
+code('docker-compose up -d --build')
+p('首次构建约 5-15 分钟（下载基础镜像和依赖包）。后续启动仅需数秒。')
+gap()
+p('步骤 3 — 验证服务状态：')
+code('docker ps')
+p('预期输出：gas_mysql (healthy)、gas_backend (Up)、gas_frontend (Up) 三个容器均处于运行状态。')
+gap()
+p('步骤 4 — 打开浏览器访问 http://localhost 进入监控看板。')
+note('首次部署后数据库为空，需导入数据后看板才会显示有效数值。参考第 3 章。')
 
-doc.add_heading('第 1 步：进入后端目录', level=2)
-add_code('cd /d "e:\\文件\\大二下作业\\Gas System\\backend"')
-
-doc.add_heading('第 2 步：安装 Python 依赖包', level=2)
-add_code('pip install -r requirements.txt')
-add_warning('这步会比较慢（约 5-10 分钟），因为要下载 TensorFlow（约 350MB）。如果下载失败，换成国内镜像：')
-add_code('pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple')
-
-doc.add_heading('第 3 步：生成数据并训练模型', level=2)
-add_para('依次执行下面三条命令（一条一条来，等上一条跑完再跑下一条）：')
-doc.add_paragraph()
-add_para('① 生成数据：', bold=True)
-add_code('python generate_real_data.py')
-add_para('看到 "Data import complete!" 说明成功。')
-doc.add_paragraph()
-add_para('② 数据分析：', bold=True)
-add_code('python data_analysis.py')
-add_para('看到 "特征矩阵 X 形状" 等字样说明成功，同时会生成一张热力图。')
-doc.add_paragraph()
-add_para('③ 训练模型：', bold=True)
-add_code('python train_model.py')
-add_para('约 1-2 分钟。屏幕上会显示训练进度，最后显示准确率 82.61%。')
-
-doc.add_heading('第 4 步：启动后端', level=2)
-add_code('python app.py')
-add_para('此时命令窗口会显示：* Running on http://127.0.0.1:5000')
-add_warning('这个窗口不要关！关了后端就停了。可以最小化到后台。')
-
-doc.add_heading('第 5 步：新开命令窗口，启动前端', level=2)
-add_para('再按 Win+R，输入 cmd，回车，打开第二个命令窗口。')
-add_code('cd /d "e:\\文件\\大二下作业\\Gas System\\frontend"')
-add_para('安装前端依赖（只需做一次）：')
-add_code('npm install --registry=https://registry.npmmirror.com')
-add_para('启动前端：')
-add_code('npm run serve')
-add_para('约 30 秒后看到 "Compiled successfully" 说明启动好了。')
-
-doc.add_heading('第 6 步：打开浏览器', level=2)
-add_para('在地址栏输入：http://localhost:8080')
-add_tip('看到监控大屏说明成功！')
-
-add_page_break()
-
-# ============================================================
-# 使用系统
-# ============================================================
-doc.add_heading('使用系统：浏览器操作指南', level=1)
-
-doc.add_heading('看板页面说明', level=2)
-add_table(
-    ['区域', '位置', '内容', '怎么用'],
+doc.add_heading('Docker 常用管理命令', level=2)
+table(
+    ['操作', '命令'],
     [
-        ['顶部标题栏', '最上面', '系统名称、时间、导出按钮', '点"导出报告"下载数据'],
-        ['左侧卡片', '左边', 'VOCs浓度、温度、湿度、风速', '自动刷新，无需操作'],
-        ['预测图表', '右上', '蓝色历史线 + 黄色预测线', '鼠标悬停看具体数值'],
-        ['预警列表', '右下', '超标警告信息', '超标时自动出现，点某一行看详情'],
+        ['查看运行状态', 'docker ps'],
+        ['查看后端日志', 'docker logs gas_backend'],
+        ['查看 MySQL 日志', 'docker logs gas_mysql'],
+        ['进入后端容器', 'docker exec -it gas_backend bash'],
+        ['重启后端 (更新模型后)', 'docker-compose restart backend'],
+        ['停止所有服务', 'docker-compose down'],
+        ['停止并清除数据卷', 'docker-compose down -v'],
+        ['重建并重启', 'docker-compose up -d --build'],
     ]
 )
 
-doc.add_heading('实时数据卡片（左侧四个框）', level=2)
-add_para('自动每 5 秒刷新一次，显示最新的监测数值。如果数据一直是 0，说明数据库里还没有数据（参考"导入你自己的数据"章节）。')
+doc.add_heading('2.2 手动部署', level=2)
 
-doc.add_heading('预测趋势图（右上图表）', level=2)
-add_table(
-    ['线条颜色', '含义'],
-    [
-        ['蓝色实线', '过去 24 小时实际测到的浓度'],
-        ['黄色虚线', 'AI 预测的未来 6 小时浓度'],
-        ['红色虚线', '80 mg/m³ 预警线（超过这条线就会报警）'],
-    ]
+p('前置条件：Python 3.10+、Node.js 16+、MySQL 8.0（需创建 gas_system 数据库，字符集 utf8mb4）。', bold=True)
+gap()
+
+p('后端部署：', bold=True)
+code(
+    'cd backend\n'
+    'pip install -r requirements.txt\n'
+    'python generate_real_data.py      # 生成并导入训练数据\n'
+    'python data_analysis.py           # 特征工程\n'
+    'python train_model.py             # 训练模型 (约2分钟)\n'
+    'python app.py                     # 启动后端 (默认 :5000)'
 )
-add_para('鼠标放到线上会弹出提示框，显示具体时间和浓度值。')
+gap()
 
-doc.add_heading('预警列表（右下表格）', level=2)
-add_table(
-    ['预警级别', '颜色', '含义', '触发条件'],
-    [
-        ['高', '🔴 红色', '严重，需立即处理', '超过 3 个预测值都超标'],
-        ['中', '🟡 黄色', '注意，需关注', '2-3 个预测值超标'],
-        ['低', '🔵 蓝色', '提醒，可关注', '1 个预测值超标'],
-    ]
+p('前端部署：', bold=True)
+code(
+    'cd frontend\n'
+    'npm install --registry=https://registry.npmmirror.com\n'
+    'npm run serve                     # 启动开发服务器 (默认 :8080)'
 )
-add_para('没有超标时，这个区域显示"暂无预警信息"。')
+gap()
 
-doc.add_heading('导出报告', level=2)
-add_para('点击右上角的"导出报告"按钮，浏览器会自动下载一个 CSV 文件。这个文件用 Excel 就能直接打开，里面是历史排放数据。')
+p('完成后访问 http://localhost:8080。前端开发服务器已配置 /api 代理至后端 :5000。')
 
-add_page_break()
+doc.add_heading('2.3 运行集成测试', level=2)
+code('cd backend\npython test_integration.py')
+p('预期输出：9/9 接口通过，4/4 性能指标达标。')
+page_break()
 
-# ============================================================
-# 导入数据
-# ============================================================
-doc.add_heading('导入你自己的数据', level=1)
-add_para('系统已经内置了 2160 条模拟数据。如果你想导入真实数据，有以下方式：')
+# ===================== 3 数据管理 =====================
+doc.add_heading('3. 数据管理', level=1)
 
-doc.add_heading('方式 A：上传 CSV 或 Excel 文件（最简单）', level=2)
-add_para('1. 把你的 CSV 或 Excel 文件准备好（格式参考下面的模板）')
-add_para('2. 打开命令窗口，执行：')
-add_code('curl -X POST http://localhost:5000/api/data/upload -F "file=@你的文件路径.csv" -F "data_type=emission"')
-add_para('把"你的文件路径.csv"替换成你实际的文件路径。')
-doc.add_paragraph()
-add_para('data_type 参数有三个选项：', bold=True)
-add_para('• emission — 废气排放数据')
-add_para('• weather — 气象数据')
-add_para('• equipment — 设备运行数据')
+p('系统管理三类核心数据：废气排放浓度、气象环境参数、设备运行工况。数据按分钟级精度对齐后统一存储。')
 
-doc.add_heading('方式 B：用 API 实时发送数据', level=2)
-add_para('适合有自动监测设备、想实时推送数据的场景：')
-add_code('curl -X POST http://localhost:5000/api/data/realtime -H "Content-Type: application/json" -d "{\\"data_type\\":\\"emission\\",\\"records\\":[{\\"sensor_id\\":\\"S01\\",\\"timestamp\\":\\"2026-06-03 10:00:00\\",\\"voc_concentration\\":65.3}]}"')
+doc.add_heading('3.1 数据导入方式', level=2)
 
-doc.add_heading('CSV 文件模板', level=2)
-add_para('你的 CSV 文件必须包含以下列（表头名称要一模一样）：')
+p('方式一：文件上传（CSV / Excel）', bold=True)
+code(
+    'curl -X POST http://localhost:5000/api/data/upload \\\n'
+    '  -F "file=@/path/to/data.csv" -F "data_type=emission"'
+)
+p('data_type 可选值：emission | weather | equipment')
+gap()
 
-add_para('废气排放数据 (emission)：', bold=True)
-add_code('sensor_id,timestamp,voc_concentration,nox_concentration,so2_concentration\nS01,2026-06-03 10:00:00,120.5,45.6,10.2\nS01,2026-06-03 11:00:00,130.0,50.1,9.8')
+p('方式二：JSON 实时接入', bold=True)
+code(
+    'curl -X POST http://localhost:5000/api/data/realtime \\\n'
+    '  -H "Content-Type: application/json" \\\n'
+    '  -d \'{"data_type":"emission","records":[{...}]}\''
+)
+gap()
 
-add_para('气象数据 (weather)：', bold=True)
-add_code('station_id,timestamp,temperature,humidity,wind_speed,wind_direction\nW01,2026-06-03 10:00:00,25.5,60.2,3.5,180')
+p('方式三：批量生成模拟数据', bold=True)
+code('python generate_real_data.py')
+p('生成 90 天 × 24 小时共 2160 条基于物理模型的数据，涵盖完整日周期和季节趋势。')
 
-add_para('设备数据 (equipment)：', bold=True)
-add_code('equipment_id,timestamp,operating_load,production_phase,status\nE01,2026-06-03 10:00:00,72.5,正常,running')
+doc.add_heading('3.2 数据格式规范', level=2)
 
-add_tip('用 Excel 编辑好后，选择"文件 → 另存为 → CSV (逗号分隔)"即可。')
-
-doc.add_heading('导入数据后需要重新训练吗？', level=2)
-add_table(
-    ['情况', '操作'],
+p('emission_data（废气排放）', bold=True)
+table(
+    ['字段', '类型', '必填', '说明'],
     [
-        ['只导入了少量数据（几十条）', '不需要，直接刷新浏览器页面就能看到新数据'],
-        ['导入了大量新数据（几百条以上）', '建议重新训练。在 backend 目录下依次执行 python data_analysis.py 和 python train_model.py'],
-        ['Docker 方式', '执行 docker-compose up -d --build backend'],
+        ['sensor_id', 'String', '是', '传感器标识'],
+        ['timestamp', 'DateTime', '是', '采样时间，格式 YYYY-MM-DD HH:MM:SS'],
+        ['voc_concentration', 'Float', '否', 'VOCs 浓度 (mg/m³)'],
+        ['nox_concentration', 'Float', '否', 'NOx 浓度 (mg/m³)'],
+        ['so2_concentration', 'Float', '否', 'SO₂ 浓度 (mg/m³)'],
     ]
 )
 
-add_page_break()
-
-# ============================================================
-# 问题排查
-# ============================================================
-doc.add_heading('遇到问题怎么办？', level=1)
-
-doc.add_heading('问题 1：浏览器打开显示"无法访问此网站"', level=2)
-add_para('可能原因：服务没有启动。')
-add_para('解决步骤：')
-add_para('1. 打开命令窗口，输入 docker ps')
-add_para('2. 如果看到空的表格或只有 1-2 行，说明服务没启动全')
-add_para('3. 重新执行：cd /d "e:\\文件\\大二下作业\\Gas System" → docker-compose up -d')
-add_para('4. 等 30 秒后刷新浏览器')
-
-doc.add_heading('问题 2：Docker 启动报错 "port is already allocated"', level=2)
-add_para('含义：端口被其他程序占用了。')
-add_para('解决步骤：')
-add_para('1. 用记事本打开 docker-compose.yml 文件')
-add_para('2. 找到 "5000:5000"，改成 "5001:5000"')
-add_para('3. 找到 "80:80"，改成 "8080:80"')
-add_para('4. 保存文件后重新执行 docker-compose up -d')
-add_para('5. 浏览器访问 http://localhost:8080 即可')
-
-doc.add_heading('问题 3：页面上数据全部显示为 0', level=2)
-add_para('含义：数据库里还没有数据。')
-add_para('解决（Docker 方式）：')
-add_code('docker exec -it gas_backend python generate_real_data.py')
-add_para('解决（手动方式）：')
-add_code('cd /d "e:\\文件\\大二下作业\\Gas System\\backend"\npython generate_real_data.py')
-
-doc.add_heading('问题 4：pip install 下载失败', level=2)
-add_para('提示 "Connection timeout" 或 "Could not find a version"。')
-add_para('解决：使用国内镜像源：')
-add_code('pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple')
-
-doc.add_heading('问题 5：提示 "No module named xxx"', level=2)
-add_para('含义：缺少某个 Python 包。')
-add_para('解决：执行 pip install xxx（把 xxx 换成报错里提到的包名）。')
-
-doc.add_heading('问题 6：docker-compose 命令不存在', level=2)
-add_para('含义：Docker Desktop 没有正确安装或没有启动。')
-add_para('解决：')
-add_para('1. 确认桌面右下角有 Docker 鲸鱼图标')
-add_para('2. 鲸鱼图标不是绿色 → 右键点它 → "Restart"')
-add_para('3. 等图标变绿后再试')
-
-add_page_break()
-
-# ============================================================
-# API 接口速查
-# ============================================================
-doc.add_heading('附录 A：API 接口速查表', level=1)
-
-add_table(
-    ['接口', '方法', '说明'],
+p('weather_data（气象数据）', bold=True)
+table(
+    ['字段', '类型', '必填', '说明'],
     [
-        ['/api/data/upload', 'POST', '上传 CSV/Excel 文件'],
-        ['/api/data/realtime', 'POST', '接收 JSON 实时数据'],
-        ['/api/realtime', 'GET', '获取最新监测数据'],
-        ['/api/prediction', 'GET', '获取 24h历史 + 6h预测'],
-        ['/api/vocs/prediction', 'GET', '预测 + 自动预警检查'],
-        ['/api/alerts', 'GET', '查询预警记录列表'],
-        ['/api/report/export', 'GET', '导出 CSV 报告'],
+        ['station_id', 'String', '是', '气象站标识'],
+        ['timestamp', 'DateTime', '是', '观测时间'],
+        ['temperature', 'Float', '否', '温度 (°C)'],
+        ['humidity', 'Float', '否', '相对湿度 (%)'],
+        ['wind_speed', 'Float', '否', '风速 (m/s)'],
+        ['wind_direction', 'Float', '否', '风向 (度)'],
     ]
 )
 
-doc.add_heading('附录 B：数据库表字段速查', level=1)
-
-add_para('emission_data（废气排放）', bold=True)
-add_code('sensor_id | timestamp | voc_concentration | nox_concentration | so2_concentration')
-
-add_para('weather_data（气象数据）', bold=True)
-add_code('station_id | timestamp | temperature | humidity | wind_speed | wind_direction')
-
-add_para('equipment_data（设备数据）', bold=True)
-add_code('equipment_id | timestamp | operating_load | production_phase | status')
-
-doc.add_heading('附录 C：名词解释', level=1)
-
-add_table(
-    ['名词', '解释'],
+p('equipment_data（设备数据）', bold=True)
+table(
+    ['字段', '类型', '必填', '说明'],
     [
-        ['Docker', '一个打包工具，把整个系统装进"箱子"，不需要单独装各种依赖'],
-        ['docker-compose', 'Docker 的遥控器，一条命令同时启动多个箱子'],
-        ['容器 (Container)', 'Docker 箱子里的小隔间，每个隔间干一件事'],
-        ['Flask', 'Python 写的网站后端框架，负责处理数据和业务逻辑'],
-        ['API', '网站后台提供的数据接口，前端通过它获取数据'],
-        ['Vue.js', '前端框架，负责页面的样子和交互效果'],
-        ['ECharts', '画图表的工具，页面上那个好看的预测曲线图就是它画的'],
-        ['LSTM', '一种 AI 算法，专门根据历史时序数据预测未来趋势'],
-        ['TensorFlow', 'Google 的 AI 工具箱，LSTM 模型在它上面运行'],
-        ['VOCs', '挥发性有机化合物，化工厂排放的主要废气污染物'],
-        ['mg/m³', '毫克每立方米，衡量空气中污染物浓度的单位'],
-        ['端口 (Port)', '电脑上的门牌号，不同服务用不同门牌号 (如 5000, 80)'],
-        ['CSV', '最简单的表格文件格式，逗号分隔，Excel 能直接打开编辑'],
-        ['JSON', '一种通用的数据交换格式，人和电脑都容易读懂'],
-        ['curl', '命令行工具，用来在黑色窗口里测试网站接口'],
-        ['localhost', '指你自己的电脑，127.0.0.1 也是同一个意思'],
-        ['MySQL', '数据库软件，负责存储和管理所有数据'],
-        ['Python', '编程语言，后端服务用它写的'],
-        ['pip', 'Python 的软件包安装工具'],
-        ['npm', 'Node.js 的软件包安装工具，前端用它安装依赖'],
+        ['equipment_id', 'String', '是', '设备标识'],
+        ['timestamp', 'DateTime', '是', '记录时间'],
+        ['operating_load', 'Float', '否', '运行负荷 (%)'],
+        ['production_phase', 'String', '否', '生产时段'],
+        ['status', 'String', '否', '运行状态'],
     ]
 )
 
-add_page_break()
+doc.add_heading('3.3 CSV 文件模板', level=2)
+code(
+    '# emission_data.csv\n'
+    'sensor_id,timestamp,voc_concentration,nox_concentration,so2_concentration\n'
+    'S01,2026-06-03 10:00:00,120.5,45.6,10.2\n\n'
+    '# weather_data.csv\n'
+    'station_id,timestamp,temperature,humidity,wind_speed,wind_direction\n'
+    'W01,2026-06-03 10:00:00,25.5,60.2,3.5,180\n\n'
+    '# equipment_data.csv\n'
+    'equipment_id,timestamp,operating_load,production_phase,status\n'
+    'E01,2026-06-03 10:00:00,72.5,正常,running'
+)
+page_break()
 
-doc.add_heading('附录 D：项目文件结构', level=1)
-add_code(
+# ===================== 4 模型 =====================
+doc.add_heading('4. 预测模型', level=1)
+
+doc.add_heading('4.1 模型架构', level=2)
+p('采用双 LSTM 层 + Dropout 正则化的序列到序列架构：')
+code(
+    'Input(24 timesteps, 14 features)\n'
+    '  → LSTM(128, return_sequences=True)\n'
+    '  → Dropout(0.3)\n'
+    '  → LSTM(64)\n'
+    '  → Dropout(0.3)\n'
+    '  → Dense(32, ReLU)\n'
+    '  → Dense(6)                    # 输出未来 6 小时预测'
+)
+p('总参数量：124,902（< 500,000 约束）')
+
+doc.add_heading('4.2 特征工程', level=2)
+p('从原始数据提取 14 维特征：')
+table(
+    ['类别', '特征', '说明'],
+    [
+        ['原始数值', 'temperature, humidity, wind_speed, operating_load', '气象与工况参数'],
+        ['时间编码', 'hour_sin/cos, day_of_week_sin/cos, is_workday', '周期信号正弦余弦编码'],
+        ['滞后特征', 'voc_lag_1h, voc_lag_3h, voc_lag_6h', '前 1/3/6 小时 VOCs 浓度'],
+        ['滚动统计', 'voc_rolling_6h_mean, voc_rolling_6h_std', '过去 6 小时均值与标准差'],
+    ]
+)
+
+doc.add_heading('4.3 训练配置', level=2)
+table(
+    ['参数', '取值'],
+    [
+        ['损失函数', 'MSE (均方误差)'],
+        ['优化器', 'Adam (lr=0.001)'],
+        ['数据划分', '70% 训练 / 15% 验证 / 15% 测试（时序顺序，不随机）'],
+        ['回调', 'EarlyStopping(patience=15) + ReduceLROnPlateau(factor=0.5) + ModelCheckpoint'],
+        ['训练集规模', '1,487 条 (70%)'],
+        ['验证集规模', '319 条 (15%)'],
+        ['测试集规模', '319 条 (15%)'],
+    ]
+)
+
+doc.add_heading('4.4 性能指标', level=2)
+table(
+    ['指标', '要求', '实测', '结论'],
+    [
+        ['准确率 (1-MAPE)', '≥ 75%', '82.61%', '达标'],
+        ['单次推理耗时', '≤ 2秒', '~99ms', '达标'],
+        ['参数量', '< 500,000', '124,902', '达标'],
+        ['MAE', '-', '12.40 mg/m³', '-'],
+        ['MSE', '-', '258.12', '-'],
+    ]
+)
+
+doc.add_heading('4.5 模型训练流程', level=2)
+p('在 backend 目录下依次执行：')
+code(
+    'python generate_real_data.py    # 步骤 1: 生成训练数据\n'
+    'python data_analysis.py         # 步骤 2: 相关性分析 + 特征工程\n'
+    'python train_model.py           # 步骤 3: 训练 + 评估 + 保存模型'
+)
+p('训练输出文件：vocs_lstm_model.keras（预测服务加载）、scaler.pkl（特征标准化）、feature_cols.npy（特征列名）。')
+note('更换训练数据后需重新执行步骤 2-3，并重启后端服务使新模型生效。')
+page_break()
+
+# ===================== 5 前端看板 =====================
+doc.add_heading('5. 监控看板', level=1)
+
+doc.add_heading('5.1 页面布局', level=2)
+p('访问 http://localhost (Docker) 或 http://localhost:8080 (开发模式) 进入看板。')
+gap()
+table(
+    ['区域', '位置', '内容', '刷新频率'],
+    [
+        ['标题栏', '顶部', '系统名称、实时时钟、导出报告按钮', '-'],
+        ['指标卡片 (×4)', '左侧', 'VOCs 浓度、温度、湿度、风速当前值', '5 秒'],
+        ['预测趋势图', '右上方', '24 小时历史值 + 6 小时预测值 + 80mg 限值线', '30 秒'],
+        ['预警列表', '右下方', '超标告警记录，按时间倒序排列', '10 秒'],
+    ]
+)
+
+doc.add_heading('5.2 趋势图说明', level=2)
+table(
+    ['图例', '含义'],
+    [
+        ['蓝色实线', '过去 24 小时实测 VOCs 浓度'],
+        ['黄色虚线', '未来 6 小时 AI 预测浓度'],
+        ['红色虚线', '预警限值线 (80 mg/m³)'],
+    ]
+)
+
+doc.add_heading('5.3 预警分级', level=2)
+table(
+    ['级别', '显示颜色', '触发条件', '建议操作'],
+    [
+        ['高 (error)', '红色', '超过 3 个预测值均超标', '立即响应，检查排放源'],
+        ['中 (warn)', '黄色', '2-3 个预测值超标', '密切关注，准备应对'],
+        ['低 (info)', '蓝色', '1 个预测值超标', '记录观察，持续跟踪'],
+    ]
+)
+p('无超标时，预警列表区域显示"暂无预警信息"。')
+
+doc.add_heading('5.4 报告导出', level=2)
+p('点击标题栏"导出报告"按钮，浏览器自动下载包含最近 500 条历史排放记录的 CSV 文件。')
+page_break()
+
+# ===================== 6 API参考 =====================
+doc.add_heading('6. API 接口参考', level=1)
+p('Base URL: http://localhost:5000 | Content-Type: application/json | Charset: UTF-8')
+
+doc.add_heading('6.1 接口总览', level=2)
+table(
+    ['接口', '方法', '功能', '返回'],
+    [
+        ['/api/data/upload', 'POST', '上传 CSV/Excel 数据文件', 'imported_rows, completeness'],
+        ['/api/data/realtime', 'POST', '接收 JSON 实时数据', 'processed_records'],
+        ['/api/realtime', 'GET', '获取最新四项监测指标', 'voc, temp, humidity, wind'],
+        ['/api/prediction', 'GET', '获取 24h 历史 + 6h 预测', 'history[24], prediction[6]'],
+        ['/api/vocs/prediction', 'GET', '预测并自动执行预警检查', 'predictions[6] + alert{}'],
+        ['/api/alerts', 'GET', '查询历史预警记录', '[alert_record, ...]'],
+        ['/api/report/export', 'GET', '导出 CSV 历史排放报告', 'text/csv 文件流'],
+    ]
+)
+
+doc.add_heading('6.2 错误码', level=2)
+table(
+    ['状态码', '含义', '典型原因'],
+    [
+        ['200', '成功', '-'],
+        ['400', '请求参数错误', '文件格式不支持 / 必填字段缺失 / 数据量不足'],
+        ['500', '服务器内部错误', '数据库连接失败 / 模型推理异常'],
+        ['503', '服务不可用', '模型文件缺失，需执行 train_model.py'],
+    ]
+)
+
+doc.add_heading('6.3 请求示例', level=2)
+p('文件上传：', bold=True)
+code(
+    'curl -X POST http://localhost:5000/api/data/upload \\\n'
+    '  -F "file=@emission_202606.csv" -F "data_type=emission"'
+)
+gap()
+p('实时数据：', bold=True)
+code(
+    'curl -X POST http://localhost:5000/api/data/realtime \\\n'
+    '  -H "Content-Type: application/json" \\\n'
+    '  -d \'{"data_type":"weather","records":[{"station_id":"W01","timestamp":"2026-06-03 10:00:00","temperature":25.5,"humidity":60.2,"wind_speed":3.5}]}\''
+)
+gap()
+p('获取预测：', bold=True)
+code('curl http://localhost:5000/api/prediction')
+page_break()
+
+# ===================== 7 故障排查 =====================
+doc.add_heading('7. 故障排查', level=1)
+
+table(
+    ['现象', '原因', '处理'],
+    [
+        ['浏览器无法访问 http://localhost', 'Docker 未启动或容器未运行', '执行 docker ps 检查，若无输出则执行 docker-compose up -d'],
+        ['看板数据全部显示 0', '数据库无数据', '执行 python generate_real_data.py 或上传数据文件'],
+        ['预测接口返回 400 "数据不足"', '数据量 < 30 条小时级记录', '确保导入至少 30 条跨小时的历史数据'],
+        ['预测接口返回 503', '模型文件缺失', '执行 python data_analysis.py && python train_model.py'],
+        ['Docker 启动报 "port already allocated"', '端口被占用', '修改 docker-compose.yml 端口映射，如 5000→5001, 80→8080'],
+        ['pip install 下载失败', '网络连通性问题', '添加 -i https://pypi.tuna.tsinghua.edu.cn/simple 使用清华镜像'],
+        ['容器状态 Restarting', '后端启动失败', '执行 docker logs gas_backend 查看错误日志'],
+        ['数据库连接拒绝', 'MySQL 未就绪或密码错误', '确认 docker ps 中 MySQL 状态为 healthy，密码为 123456'],
+    ]
+)
+
+page_break()
+
+# ===================== 附录 =====================
+doc.add_heading('附录 A：技术栈', level=1)
+table(
+    ['层级', '技术', '版本'],
+    [
+        ['前端框架', 'Vue.js', '3.2'],
+        ['图表库', 'ECharts (vue-echarts)', '6.1 / 8.0'],
+        ['HTTP', 'Axios', '1.16'],
+        ['后端框架', 'Flask', '3.1.3'],
+        ['ORM', 'Flask-SQLAlchemy', '3.1.1'],
+        ['数据库', 'MySQL', '8.0'],
+        ['数据库驱动', 'PyMySQL', '1.1.3'],
+        ['深度学习', 'TensorFlow (Keras)', '2.21'],
+        ['数据处理', 'pandas', '3.0'],
+        ['机器学习', 'scikit-learn', '1.6'],
+        ['可视化', 'matplotlib / seaborn', '3.10 / 0.13'],
+        ['容器化', 'Docker + Compose', '29.x / 2.x'],
+        ['Web 服务器', 'Nginx', 'Alpine'],
+    ]
+)
+
+doc.add_heading('附录 B：项目结构', level=1)
+code(
     'Gas-System/\n'
-    '├── docker-compose.yml          Docker 编排配置\n'
-    '├── 使用手册.md/docx            本使用手册\n'
-    '├── backend/                    后端代码目录\n'
-    '│   ├── app.py                  Flask 主程序 + 7 个 API 路由\n'
-    '│   ├── models.py               数据库模型 (4 张表)\n'
-    '│   ├── predictor.py            VOCSPredictor 推理类\n'
-    '│   ├── alert.py                预警触发逻辑\n'
-    '│   ├── data_cleaner.py         数据清洗工具\n'
-    '│   ├── data_analysis.py        数据分析 + 特征工程\n'
-    '│   ├── train_model.py          LSTM 模型训练 + 评估\n'
-    '│   ├── generate_real_data.py   真实感数据生成器\n'
-    '│   ├── test_integration.py     集成测试 + 性能评估\n'
-    '│   ├── Dockerfile              后端 Docker 镜像\n'
-    '│   └── requirements.txt        Python 依赖清单\n'
-    '├── frontend/                   前端代码目录\n'
-    '│   ├── Dockerfile              前端 Docker 镜像\n'
-    '│   ├── nginx.conf              Nginx 配置\n'
-    '│   ├── package.json            npm 依赖清单\n'
+    '├── docker-compose.yml              # 三服务编排\n'
+    '├── 使用手册.docx                    # 本文档\n'
+    '├── backend/\n'
+    '│   ├── app.py                      # Flask 主程序 (7 个 API)\n'
+    '│   ├── models.py                   # ORM 模型 (4 表)\n'
+    '│   ├── predictor.py                # VOCSPredictor 推理封装\n'
+    '│   ├── alert.py                    # 预警触发逻辑\n'
+    '│   ├── data_cleaner.py             # 数据清洗\n'
+    '│   ├── data_analysis.py            # 数据分析 + 特征工程\n'
+    '│   ├── train_model.py              # LSTM 训练 + 评估\n'
+    '│   ├── generate_real_data.py       # 数据生成器\n'
+    '│   ├── test_integration.py         # 集成测试\n'
+    '│   ├── Dockerfile                  # 后端镜像\n'
+    '│   └── requirements.txt            # Python 依赖\n'
+    '├── frontend/\n'
+    '│   ├── Dockerfile                  # 前端镜像\n'
+    '│   ├── nginx.conf                  # Nginx 反向代理\n'
+    '│   ├── package.json                # npm 依赖\n'
     '│   └── src/\n'
-    '│       ├── views/DashboardView.vue   监控看板主页\n'
-    '│       ├── components/               图表/卡片/预警组件\n'
-    '│       └── utils/api.js             API 接口封装\n'
-    '└── docker-compose.yml          整体编排配置\n'
+    '│       ├── views/DashboardView.vue # 监控看板主页\n'
+    '│       ├── components/             # UI 组件\n'
+    '│       └── utils/api.js            # API 封装\n'
+    '└── .gitignore'
 )
 
-# ============================================================
-# 保存
-# ============================================================
-output_path = r'e:\文件\大二下作业\Gas System\使用手册.docx'
-doc.save(output_path)
-print(f'Word 文档已生成: {output_path}')
-print('包含: 封面 + 新手必读 + Docker部署教程 + 手动部署教程 + 浏览器操作 + 数据导入 + 问题排查 + API速查 + 名词解释 + 项目结构')
+# ===================== 保存 =====================
+if __name__ == '__main__':
+    import sys
+    out = sys.argv[1] if len(sys.argv) > 1 else r'e:\文件\大二下作业\Gas System\使用手册_新版.docx'
+    doc.save(out)
+    print(f'已生成: {out}')
