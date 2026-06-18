@@ -90,37 +90,6 @@ const api = {
     });
   },
 
-  /**
-   * 上传数据文件（CSV / Excel）
-   * @param {File} file - 文件对象
-   * @param {string} dataType - 数据类型: emission | weather | equipment
-   * @returns {Promise<{ message: string, imported_rows: number, before_completeness: number, after_completeness: number }>}
-   */
-  uploadData(file, dataType) {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("data_type", dataType);
-    return service.post("/data/upload", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-      timeout: 30000,
-    });
-  },
-
-  /**
-   * 清空所有数据（排放、气象、设备、预警记录）
-   * @returns {Promise<{ message: string, deleted: object }>}
-   */
-  clearData() {
-    return service.delete("/data/clear");
-  },
-
-  /**
-   * 一键重新导入上次上传的数据
-   * @returns {Promise<{ message: string, total_imported: number, results: object }>}
-   */
-  reimportData() {
-    return service.post("/data/reimport");
-  },
 };
 
 export default api;

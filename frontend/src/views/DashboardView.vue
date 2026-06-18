@@ -15,12 +15,6 @@
         </div>
       </div>
       <div class="header-right">
-        <button class="import-btn" @click="handleClear" :disabled="clearing">
-          {{ clearing ? "清空中..." : "🗑 清空数据" }}
-        </button>
-        <button class="import-btn" @click="showUpload = true">
-          📥 导入数据
-        </button>
         <button class="export-btn" :disabled="exporting" @click="handleExport">
           {{ exporting ? "导出中..." : "📄 导出报告" }}
         </button>
@@ -65,13 +59,6 @@
         </div>
       </section>
     </main>
-
-    <!-- 数据导入弹窗 -->
-    <DataUpload
-      :visible="showUpload"
-      @close="showUpload = false"
-      @uploaded="onDataUploaded"
-    />
   </div>
 </template>
 
@@ -80,9 +67,7 @@ import { ref, onMounted, onUnmounted } from "vue";
 import DataCard from "@/components/DataCard.vue";
 import AlertList from "@/components/AlertList.vue";
 import PredictionChart from "@/components/PredictionChart.vue";
-import DataUpload from "@/components/DataUpload.vue";
 import api from "@/utils/api";
-import { showToast } from "@/utils/globalState";
 
 // ========================
 // 实时指标数据
@@ -97,17 +82,6 @@ const indicators = ref([
 const latestUpdate = ref("加载中...");
 const currentTime = ref(new Date().toLocaleString());
 const exporting = ref(false);
-const clearing = ref(false);
-const showUpload = ref(false);
-
-// ========================
-// 数据导入成功回调
-// ========================
-const onDataUploaded = (res) => {
-  showToast("数据导入成功：" + res.imported_rows + " 条记录", "success");
-  showUpload.value = false;
-  fetchRealtimeData();
-};
 
 // ========================
 // 实时数据轮询（每 5 秒）
@@ -153,29 +127,6 @@ const handleExport = async () => {
     // 全局 Toast 已由 api.js 统一处理错误
   } finally {
     exporting.value = false;
-  }
-};
-
-// ========================
-// 清空数据
-// ========================
-const handleClear = async () => {
-  if (!window.confirm("确定要清空所有数据吗？\n\n此操作将删除：\n- 废气排放数据\n- 气象数据\n- 设备运行数据\n- 预警记录\n\n此操作不可恢复！")) {
-    return;
-  }
-  clearing.value = true;
-  try {
-    const res = await api.clearData();
-    const d = res.deleted || {};
-    showToast(
-      `数据已清空（排放:${d.emission || 0} 气象:${d.weather || 0} 设备:${d.equipment || 0} 预警:${d.alerts || 0}）`,
-      "success"
-    );
-    fetchRealtimeData();
-  } catch (err) {
-    console.error("[Dashboard] 清空失败:", err);
-  } finally {
-    clearing.value = false;
   }
 };
 
@@ -300,18 +251,6 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.import-btn {
-  padding: 8px 20px;
-  background: rgba(46, 123, 207, 0.15);
-  color: #00d4ff;
-  border: 1px solid rgba(46, 123, 207, 0.3);
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-}
 .export-btn {
   padding: 8px 20px;
   background: linear-gradient(135deg, #00d4ff, #009cbb);
