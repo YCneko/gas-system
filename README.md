@@ -18,7 +18,7 @@
 
 ```bash
 # 克隆仓库（Gitee 国内镜像，速度更快）
-git clone https://gitee.com/YCneko/gas-system.git
+git clone https://gitee.com/YCyoko/gas-system.git
 
 # 或从 GitHub 克隆
 git clone https://github.com/YCneko/gas-system.git
@@ -30,7 +30,7 @@ cd gas-system
 
 | 源 | 下载地址 |
 |------|------|
-| **Gitee（国内推荐）** | [https://gitee.com/YCneko/gas-system/releases](https://gitee.com/YCneko/gas-system/releases) |
+| **Gitee（国内推荐）** | [https://gitee.com/YCyoko/gas-system/releases](https://gitee.com/YCyoko/gas-system/releases) |
 | **GitHub** | [https://github.com/YCneko/gas-system/releases](https://github.com/YCneko/gas-system/releases) |
 
 点击上述链接 → 选择最新版本 → 下载 `Source code (zip)` → 解压到本地目录。
