@@ -403,7 +403,6 @@ def alerts():
 def report_export():
     """导出 CSV 报告（历史排放 + 气象数据）"""
     import io
-    import csv
 
     try:
         from sqlalchemy import desc
@@ -415,16 +414,17 @@ def report_export():
 
         output = io.StringIO()
         output.write('﻿')  # UTF-8 BOM，确保 Excel 正确识别中文编码
-        writer = csv.writer(output)
-        writer.writerow(['时间', 'VOCs浓度(mg/m³)', 'NOx浓度(mg/m³)', 'SO2浓度(mg/m³)'])
+        output.write('时间,VOCs浓度(mg/m³),NOx浓度(mg/m³),SO2浓度(mg/m³)\n')
 
         for r in records:
-            writer.writerow([
-                r.timestamp.strftime('%Y-%m-%d %H:%M:%S') if r.timestamp else '',
-                r.voc_concentration or '',
-                r.nox_concentration or '',
-                r.so2_concentration or '',
-            ])
+            # 使用 ="..." 格式强制 Excel 以文本显示时间，彻底避免列宽不足出现 ####
+            time_str = f'="{r.timestamp.strftime("%Y/%m/%d %H:%M")}"' if r.timestamp else ''
+            output.write(
+                f'{time_str},'
+                f'{r.voc_concentration or ""},'
+                f'{r.nox_concentration or ""},'
+                f'{r.so2_concentration or ""}\n'
+            )
 
         csv_content = output.getvalue()
         output.close()
