@@ -3,7 +3,7 @@
 > **第十七届中国大学生服务外包创新创业大赛 A 类赛题**  
 > 面向化工园区的多源废气智能治理系统开发
 
-[![Version](https://img.shields.io/badge/version-1.3.2-blue)](https://github.com/YCneko/gas-system/tags)
+[![Version](https://img.shields.io/badge/version-1.3.3-blue)](https://github.com/YCneko/gas-system/releases)
 [![Python](https://img.shields.io/badge/python-3.10+-green)](https://www.python.org/)
 [![Vue](https://img.shields.io/badge/vue-3.x-brightgreen)](https://vuejs.org/)
 [![TensorFlow](https://img.shields.io/badge/tensorflow-2.x-orange)](https://www.tensorflow.org/)
