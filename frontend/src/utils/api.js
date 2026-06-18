@@ -105,6 +105,22 @@ const api = {
       timeout: 30000,
     });
   },
+
+  /**
+   * 清空所有数据（排放、气象、设备、预警记录）
+   * @returns {Promise<{ message: string, deleted: object }>}
+   */
+  clearData() {
+    return service.delete("/data/clear");
+  },
+
+  /**
+   * 一键重新导入上次上传的数据
+   * @returns {Promise<{ message: string, total_imported: number, results: object }>}
+   */
+  reimportData() {
+    return service.post("/data/reimport");
+  },
 };
 
 export default api;

@@ -32,6 +32,13 @@
 
     <div v-if="!sortedAlerts.length" class="empty-state">
       <span>暂无预警信息 ✅</span>
+      <span class="empty-hint">仅显示预测时间在当前时间之后的预警</span>
+    </div>
+
+    <div class="current-time-bar">
+      <span class="time-icon">🕐</span>
+      <span>当前时间：{{ currentTime }}</span>
+      <span class="filter-note">（仅显示未来预警，已过期自动隐藏）</span>
     </div>
 
     <!-- 预警详情弹窗 -->
@@ -81,6 +88,7 @@ const list = ref([]);
 const showDetail = ref(false);
 const currentAlert = ref(null);
 const knownIds = ref(new Set());
+const currentTime = ref(new Date().toLocaleString());
 
 // ========================
 // 获取预警列表
@@ -90,37 +98,48 @@ const fetchAlerts = async () => {
     const data = await api.getAlertList();
     const newList = Array.isArray(data) ? data : [];
 
+    // 更新当前时间
+    currentTime.value = new Date().toLocaleString();
+
     newList.forEach((item) => {
       const id = item.id ?? item.time + item.metric;
       if (!knownIds.value.has(id) && item.level !== "normal") {
         item._isNew = true;
-        sendNotification(item);
         knownIds.value.add(id);
       } else {
         item._isNew = false;
       }
     });
 
-    list.value = newList;
+    // 前端二次过滤：仅保留预测超标时间在当前时间之后的预警
+    const now = new Date();
+    list.value = newList.filter((item) => {
+      if (!item.predicted_exceedance_time) {
+        // 没有预测时间字段的旧数据保留（兼容）
+        return true;
+      }
+      const predTime = new Date(item.predicted_exceedance_time);
+      return predTime > now;
+    });
   } catch (err) {
     console.error("[AlertList] 获取预警失败:", err);
   }
 };
 
 // ========================
-// 浏览器桌面通知
+// 浏览器桌面通知（已关闭，取消注释可恢复）
 // ========================
-const sendNotification = (alert) => {
-  if (Notification.permission !== "granted") return;
-  try {
-    new Notification("⚠️ Gas System 预警", {
-      body: `[${levelText(alert.level)}] ${alert.metric}：${alert.detail}`,
-      tag: alert.id || alert.time + alert.metric,
-    });
-  } catch (e) {
-    // Notification API 不支持时静默
-  }
-};
+// const sendNotification = (alert) => {
+//   if (Notification.permission !== "granted") return;
+//   try {
+//     new Notification("⚠️ Gas System 预警", {
+//       body: `[${levelText(alert.level)}] ${alert.metric}：${alert.detail}`,
+//       tag: alert.id || alert.time + alert.metric,
+//     });
+//   } catch (e) {
+//     // Notification API 不支持时静默
+//   }
+// };
 
 // ========================
 // 弹窗控制
@@ -162,14 +181,19 @@ const levelText = (level) => {
 // 生命周期
 // ========================
 let timer = null;
+let clockTimer = null;
 onMounted(() => {
-  if ("Notification" in window && Notification.permission === "default") {
-    Notification.requestPermission();
-  }
   fetchAlerts();
   timer = setInterval(fetchAlerts, 10000);
+  // 每秒刷新当前时间显示
+  clockTimer = setInterval(() => {
+    currentTime.value = new Date().toLocaleString();
+  }, 1000);
 });
-onUnmounted(() => clearInterval(timer));
+onUnmounted(() => {
+  clearInterval(timer);
+  clearInterval(clockTimer);
+});
 </script>
 
 <style scoped>
@@ -293,9 +317,36 @@ tr:hover {
 /* ---------- 空状态 ---------- */
 .empty-state {
   text-align: center;
-  padding: 36px 16px;
+  padding: 36px 16px 8px;
   color: #576580;
   font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.empty-hint {
+  font-size: 12px;
+  color: #4a5568;
+}
+
+/* ---------- 当前时间指示条 ---------- */
+.current-time-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px 12px;
+  font-size: 12px;
+  color: #6b7a94;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+.time-icon {
+  font-size: 14px;
+}
+.filter-note {
+  color: #4a5568;
+  font-size: 11px;
 }
 
 /* ---------- 弹窗 ---------- */

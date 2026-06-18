@@ -59,15 +59,19 @@ def _build_feature_sequence():
     LOOKBACK = 24
     from sqlalchemy import desc
 
-    # 获取最近 ~36 小时的排放记录
+    # 基于最新记录时间，向前取 72 小时窗口（避免旧数据跨缺口混入）
+    newest = EmissionData.query.order_by(desc(EmissionData.timestamp)).first()
+    if not newest:
+        return None, "排放数据为空"
+    min_ts = newest.timestamp - pd.Timedelta(hours=72)
+
     emission_records = (EmissionData.query
-                        .order_by(desc(EmissionData.timestamp))
-                        .limit(LOOKBACK * 2 + 12).all())
+                        .filter(EmissionData.timestamp >= min_ts)
+                        .order_by(EmissionData.timestamp)
+                        .all())
     if not emission_records:
         return None, "排放数据为空"
 
-    emission_records = sorted(emission_records, key=lambda r: r.timestamp)
-    min_ts = emission_records[0].timestamp.replace(second=0, microsecond=0)
     max_ts = emission_records[-1].timestamp.replace(second=0, microsecond=0) + pd.Timedelta(minutes=1)
 
     # 批量查询气象和设备数据
@@ -83,6 +87,14 @@ def _build_feature_sequence():
     # 按分钟分组取均值（时序对齐误差 ≤1 分钟）
     def _minute_key(ts):
         return ts.replace(second=0, microsecond=0)
+
+    # 排放数据按分钟预聚合（多传感器取均值，避免 drop_duplicates 丢数据）
+    emission_by_min = {}
+    for em in emission_records:
+        k = _minute_key(em.timestamp)
+        emission_by_min.setdefault(k, []).append(em)
+    emission_avg = {k: np.mean([r.voc_concentration for r in recs if r.voc_concentration is not None])
+                    if recs else 0 for k, recs in emission_by_min.items()}
 
     weather_by_min = {}
     for w in all_weather:
@@ -101,22 +113,24 @@ def _build_feature_sequence():
     equipment_avg = {k: np.mean([r.operating_load for r in recs if r.operating_load is not None])
                      if recs else None for k, recs in equipment_by_min.items()}
 
-    rows = []
-    for em in emission_records:
-        min_ts_key = _minute_key(em.timestamp)
-        w = weather_avg.get(min_ts_key, {})
-        eq_load = equipment_avg.get(min_ts_key)
+    # 收集所有分钟键，构建规整分钟级数据
+    all_minutes = sorted(set(list(emission_avg.keys()) +
+                             list(weather_avg.keys()) +
+                             list(equipment_avg.keys())))
 
+    rows = []
+    for min_ts_key in all_minutes:
+        w = weather_avg.get(min_ts_key, {})
         rows.append({
             'minute': min_ts_key,
-            'voc_concentration': em.voc_concentration or 0,
+            'voc_concentration': emission_avg.get(min_ts_key, 0),
             'temperature': w.get('temperature') or 0,
             'humidity': w.get('humidity') or 0,
             'wind_speed': w.get('wind_speed') or 0,
-            'operating_load': eq_load if eq_load is not None else 0,
+            'operating_load': equipment_avg.get(min_ts_key, 0),
         })
 
-    df = pd.DataFrame(rows).drop_duplicates(subset='minute').sort_values('minute').reset_index(drop=True)
+    df = pd.DataFrame(rows).sort_values('minute').reset_index(drop=True)
 
     # 降采样至小时级用于 LSTM（取小时均值）
     df['hour'] = pd.to_datetime(df['minute']).dt.floor('h')
@@ -163,6 +177,10 @@ def _build_feature_sequence():
 
 # ---------- 文件上传接口（支持 CSV + Excel）----------
 ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls'}
+LAST_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'last_upload')
+
+os.makedirs(LAST_UPLOAD_DIR, exist_ok=True)
+
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -175,6 +193,25 @@ def _read_dataframe(file, filename):
         return pd.read_csv(file)
     else:
         return pd.read_excel(file)
+
+
+def _save_last_upload(file, data_type):
+    """保存上传文件副本到 last_upload 目录"""
+    import json
+    ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'csv'
+    save_path = os.path.join(LAST_UPLOAD_DIR, f'{data_type}.{ext}')
+    file.seek(0)
+    file.save(save_path)
+
+    # 更新元信息
+    info_path = os.path.join(LAST_UPLOAD_DIR, 'info.json')
+    info = {}
+    if os.path.exists(info_path):
+        with open(info_path, 'r', encoding='utf-8') as f:
+            info = json.load(f)
+    info[data_type] = {'filename': file.filename, 'saved_at': datetime.utcnow().isoformat()}
+    with open(info_path, 'w', encoding='utf-8') as f:
+        json.dump(info, f, ensure_ascii=False)
 
 
 @app.route('/api/data/upload', methods=['POST'])
@@ -213,6 +250,12 @@ def upload_file():
 
         db.session.add_all(records)
         db.session.commit()
+
+        # 保存副本供"一键导入上次数据"使用
+        try:
+            _save_last_upload(file, data_type)
+        except Exception:
+            pass  # 副本保存失败不影响主流程
 
         return jsonify({
             'message': '导入成功',
@@ -333,35 +376,61 @@ def prediction():
     try:
         from sqlalchemy import desc
 
-        records = (EmissionData.query
-                   .order_by(desc(EmissionData.timestamp))
-                   .limit(30).all())
-        records = sorted(records, key=lambda r: r.timestamp)
+        # 获取最近 ~36 小时排放记录，按小时聚合（多传感器取均值，去重）
+        newest = EmissionData.query.order_by(desc(EmissionData.timestamp)).first()
+        if not newest:
+            return jsonify({'history': [], 'prediction': [], 'alert': None}), 200
+
+        since = newest.timestamp - pd.Timedelta(hours=36)
+        raw = (EmissionData.query
+               .filter(EmissionData.timestamp >= since)
+               .order_by(EmissionData.timestamp)
+               .all())
+
+        # 按小时聚合（每小时一个点）
+        hourly = {}
+        for r in raw:
+            h = r.timestamp.replace(minute=0, second=0, microsecond=0)
+            hourly.setdefault(h, []).append(r.voc_concentration)
 
         history = [
-            {'time': r.timestamp.strftime('%m/%d %H:%M'), 'value': round(r.voc_concentration, 1)}
-            for r in records[-24:] if r.voc_concentration is not None
-        ]
+            {'time': h.strftime('%m/%d %H:%M'), 'value': round(np.mean(vals), 1)}
+            for h, vals in sorted(hourly.items())
+            if vals and all(v is not None for v in vals)
+        ][-24:]  # 最近24小时
 
         # 尝试预测，失败则返回空
         prediction = []
+        alert_info = None
         try:
             sequence, _ = _build_feature_sequence()
             if sequence is not None:
                 predictor = _get_predictor()
                 pred_result = predictor.predict(sequence)
                 if not pred_result.get('error'):
-                    last_ts = records[-1].timestamp if records else datetime.utcnow()
+                    last_hour = sorted(hourly.keys())[-1] if hourly else newest.timestamp
                     for i, v in enumerate(pred_result['predictions']):
-                        future_ts = last_ts + pd.Timedelta(hours=i + 1)
+                        future_ts = last_hour + pd.Timedelta(hours=i + 1)
                         prediction.append({
                             'time': future_ts.strftime('%m/%d %H:%M'),
                             'value': round(v, 1),
                         })
+                    # 触发预警检查（确保前端图表刷新时自动生成预警记录）
+                    from alert import check_vocs_alert
+                    alert_result = check_vocs_alert(pred_result['predictions'])
+                    alert_info = {
+                        'triggered': alert_result.get('alert_triggered', False),
+                        'level': alert_result.get('alert_level'),
+                        'exceed_count': alert_result.get('exceed_count', 0),
+                    }
         except Exception:
             pass
 
-        return jsonify({'history': history, 'prediction': prediction}), 200
+        return jsonify({
+            'history': history,
+            'prediction': prediction,
+            'alert': alert_info,
+        }), 200
 
     except Exception as e:
         return jsonify({'error': True, 'message': str(e)}), 500
@@ -400,14 +469,20 @@ def alerts():
 
         level_map = {'高': 'error', '中': 'warn', '低': 'info'}
 
+        now = datetime.utcnow()
         result = []
         for r in records:
+            # 只返回预测超标时间在当前时间之后的预警（过滤已过期的历史预警）
+            if r.predicted_exceedance_time and r.predicted_exceedance_time <= now:
+                continue
             result.append({
                 'id': r.id,
-                'time': r.alert_timestamp.strftime('%m/%d %H:%M') if r.alert_timestamp else '',
+                'time': r.predicted_exceedance_time.strftime('%m/%d %H:%M') if r.predicted_exceedance_time else (r.alert_timestamp.strftime('%m/%d %H:%M') if r.alert_timestamp else ''),
                 'metric': 'VOCs浓度',
                 'level': level_map.get(r.alert_level, 'info'),
                 'detail': f"预测超标时间: {r.predicted_exceedance_time.strftime('%m/%d %H:%M') if r.predicted_exceedance_time else ''}, 预测值: {r.predicted_value} mg/m³",
+                'predicted_exceedance_time': r.predicted_exceedance_time.isoformat() if r.predicted_exceedance_time else '',
+                'predicted_value': r.predicted_value or 0,
             })
 
         return jsonify(result), 200
@@ -457,6 +532,105 @@ def report_export():
         return jsonify({'error': True, 'message': str(e)}), 500
 
 
+
+
+# ---------- 一键导入上次数据 ----------
+@app.route('/api/data/reimport', methods=['POST'])
+def reimport_last_data():
+    """重新导入上次上传的所有数据文件"""
+    import json
+    import os as _os
+
+    info_path = os.path.join(LAST_UPLOAD_DIR, 'info.json')
+    if not _os.path.exists(info_path):
+        return jsonify({'error': '没有可用的上次导入记录'}), 404
+
+    with open(info_path, 'r', encoding='utf-8') as f:
+        info = json.load(f)
+
+    if not info:
+        return jsonify({'error': '没有可用的上次导入记录'}), 404
+
+    results = {}
+    total_imported = 0
+
+    for data_type, meta in info.items():
+        if data_type not in ('emission', 'equipment', 'weather'):
+            continue
+        saved_file = None
+        for ext in ['csv', 'xlsx', 'xls']:
+            candidate = os.path.join(LAST_UPLOAD_DIR, f'{data_type}.{ext}')
+            if _os.path.exists(candidate):
+                saved_file = candidate
+                break
+
+        if not saved_file:
+            results[data_type] = {'error': '文件不存在'}
+            continue
+
+        try:
+            df = _read_dataframe(saved_file, f'{data_type}.csv' if saved_file.endswith('.csv') else f'{data_type}.xlsx')
+            if df.empty:
+                results[data_type] = {'error': '文件为空'}
+                continue
+
+            if data_type == 'emission':
+                value_cols = ['voc_concentration', 'nox_concentration', 'so2_concentration']
+                model = EmissionData
+            elif data_type == 'equipment':
+                value_cols = ['operating_load']
+                model = EquipmentData
+            else:
+                value_cols = ['temperature', 'humidity', 'wind_speed', 'wind_direction']
+                model = WeatherData
+
+            cleaned_df, before_pct, after_pct = clean_dataframe(df, value_cols=value_cols)
+
+            records = []
+            for _, row in cleaned_df.iterrows():
+                record = {col: row[col] for col in cleaned_df.columns if col != 'id'}
+                records.append(model(**record))
+
+            db.session.add_all(records)
+            db.session.commit()
+            results[data_type] = {
+                'imported_rows': len(records),
+                'before_completeness': round(before_pct, 2),
+                'after_completeness': round(after_pct, 2),
+            }
+            total_imported += len(records)
+        except Exception as e:
+            db.session.rollback()
+            results[data_type] = {'error': str(e)}
+
+    return jsonify({
+        'message': f'已重新导入 {total_imported} 条记录',
+        'total_imported': total_imported,
+        'results': results,
+    }), 200
+
+
+# ---------- 清空数据接口 ----------
+@app.route('/api/data/clear', methods=['DELETE'])
+def clear_data():
+    """清空所有数据表（排放、气象、设备、预警记录）"""
+    try:
+        from models import AlertRecord
+        deleted = {}
+        for name, model in [('emission', EmissionData), ('weather', WeatherData),
+                            ('equipment', EquipmentData), ('alerts', AlertRecord)]:
+            count = db.session.query(model).delete()
+            deleted[name] = count
+        db.session.commit()
+        return jsonify({
+            'message': '数据已清空',
+            'deleted': deleted,
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'清空失败: {str(e)}'}), 500
+
+
 if __name__ == '__main__':
     # 启动时预热模型（避免首次请求冷启动超时）
     print("[init] 预加载模型...")
@@ -466,4 +640,4 @@ if __name__ == '__main__':
         print("[init] 模型预加载完成")
     except Exception as e:
         print(f"[init] 模型预加载跳过: {e}")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)

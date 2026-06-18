@@ -76,3 +76,6 @@ Thumbs.db
 *.npy
 *.npz
 *.png
+
+# 上传临时目录
+backend/last_upload/

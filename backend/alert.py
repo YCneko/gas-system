@@ -42,7 +42,7 @@ def check_vocs_alert(predictions, base_timestamp=None):
                 'elapsed_ms': 0,
             }
 
-        THRESHOLD = 80.0
+        THRESHOLD = 100.0
         exceed_indices = [i for i, v in enumerate(predictions) if v > THRESHOLD]
 
         if not exceed_indices:
@@ -66,20 +66,36 @@ def check_vocs_alert(predictions, base_timestamp=None):
 
         alert_records = []
         for i in exceed_indices:
+            predicted_time = base_ts + timedelta(hours=i + 1)
+            # 按小时对齐（去重不受秒级差异影响）
+            predicted_time_hour = predicted_time.replace(minute=0, second=0, microsecond=0)
+            predicted_val = round(predictions[i], 2)
+
+            # 去重：检查是否已存在相同预测小时和预警等级的记录
+            existing = AlertRecord.query.filter_by(
+                alert_level=alert_level,
+            ).filter(
+                AlertRecord.predicted_exceedance_time >= predicted_time_hour,
+                AlertRecord.predicted_exceedance_time < predicted_time_hour + timedelta(hours=1),
+            ).first()
+            if existing:
+                continue  # 跳过重复记录
+
             record = AlertRecord(
                 alert_timestamp=datetime.utcnow(),
-                predicted_exceedance_time=base_ts + timedelta(hours=i + 1),
-                predicted_value=round(predictions[i], 2),
+                predicted_exceedance_time=predicted_time,
+                predicted_value=predicted_val,
                 alert_level=alert_level,
             )
             db.session.add(record)
             alert_records.append({
-                'predicted_exceedance_time': (base_ts + timedelta(hours=i + 1)).isoformat(),
-                'predicted_value': round(predictions[i], 2),
+                'predicted_exceedance_time': predicted_time.isoformat(),
+                'predicted_value': predicted_val,
                 'alert_level': alert_level,
             })
 
-        db.session.commit()
+        if alert_records:
+            db.session.commit()
 
         elapsed = (time.perf_counter() - start) * 1000
         return {

@@ -15,6 +15,9 @@
         </div>
       </div>
       <div class="header-right">
+        <button class="import-btn" @click="handleClear" :disabled="clearing">
+          {{ clearing ? "清空中..." : "🗑 清空数据" }}
+        </button>
         <button class="import-btn" @click="showUpload = true">
           📥 导入数据
         </button>
@@ -48,7 +51,7 @@
             <span class="panel-meta">更新于 {{ latestUpdate }}</span>
           </div>
           <div class="chart-container">
-            <PredictionChart :limit="80" />
+            <PredictionChart :limit="100" />
           </div>
         </div>
 
@@ -85,7 +88,7 @@ import { showToast } from "@/utils/globalState";
 // 实时指标数据
 // ========================
 const indicators = ref([
-  { title: "VOCs 浓度", value: 0, unit: "mg/m³", threshold: 0.8 },
+  { title: "VOCs 浓度", value: 0, unit: "mg/m³", threshold: 100 },
   { title: "温度", value: 0, unit: "°C", threshold: 30 },
   { title: "湿度", value: 0, unit: "%", threshold: 70 },
   { title: "风速", value: 0, unit: "m/s", threshold: 2.0 },
@@ -94,6 +97,7 @@ const indicators = ref([
 const latestUpdate = ref("加载中...");
 const currentTime = ref(new Date().toLocaleString());
 const exporting = ref(false);
+const clearing = ref(false);
 const showUpload = ref(false);
 
 // ========================
@@ -149,6 +153,29 @@ const handleExport = async () => {
     // 全局 Toast 已由 api.js 统一处理错误
   } finally {
     exporting.value = false;
+  }
+};
+
+// ========================
+// 清空数据
+// ========================
+const handleClear = async () => {
+  if (!window.confirm("确定要清空所有数据吗？\n\n此操作将删除：\n- 废气排放数据\n- 气象数据\n- 设备运行数据\n- 预警记录\n\n此操作不可恢复！")) {
+    return;
+  }
+  clearing.value = true;
+  try {
+    const res = await api.clearData();
+    const d = res.deleted || {};
+    showToast(
+      `数据已清空（排放:${d.emission || 0} 气象:${d.weather || 0} 设备:${d.equipment || 0} 预警:${d.alerts || 0}）`,
+      "success"
+    );
+    fetchRealtimeData();
+  } catch (err) {
+    console.error("[Dashboard] 清空失败:", err);
+  } finally {
+    clearing.value = false;
   }
 };
 
@@ -285,11 +312,6 @@ onUnmounted(() => {
   transition: all 0.2s;
   white-space: nowrap;
 }
-.import-btn:hover {
-  background: rgba(46, 123, 207, 0.25);
-  border-color: #00d4ff;
-}
-
 .export-btn {
   padding: 8px 20px;
   background: linear-gradient(135deg, #00d4ff, #009cbb);

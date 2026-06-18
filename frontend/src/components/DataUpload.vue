@@ -11,9 +11,9 @@
           <div class="modal-body">
             <!-- 文件选择区域 -->
             <div class="form-group">
-              <label class="form-label">选择文件</label>
+              <label class="form-label">选择文件（支持多选）</label>
               <div
-                :class="['drop-zone', { dragover: isDragover, hasFile: selectedFile }]"
+                :class="['drop-zone', { dragover: isDragover, hasFile: files.length > 0 }]"
                 @dragover.prevent="isDragover = true"
                 @dragleave.prevent="isDragover = false"
                 @drop.prevent="onDrop"
@@ -23,47 +23,52 @@
                   ref="fileInput"
                   type="file"
                   accept=".csv,.xlsx,.xls"
+                  multiple
                   style="display:none"
                   @change="onFileChange"
                 />
-                <template v-if="!selectedFile">
+                <template v-if="files.length === 0">
                   <div class="drop-icon">📂</div>
                   <p class="drop-text">点击选择文件，或将 CSV / Excel 文件拖拽到此处</p>
-                  <p class="drop-hint">支持 .csv / .xlsx / .xls 格式，系统自动识别数据类型</p>
+                  <p class="drop-hint">支持 .csv / .xlsx / .xls 格式，可一次选择多个文件，系统自动识别数据类型</p>
                 </template>
                 <template v-else>
-                  <div class="file-info">
-                    <span class="file-icon">📄</span>
-                    <span class="file-name">{{ selectedFile.name }}</span>
-                    <span class="file-size">{{ formatSize(selectedFile.size) }}</span>
-                    <button class="file-remove" @click.stop="removeFile">✕</button>
+                  <div class="file-list">
+                    <div v-for="(f, i) in files" :key="i" class="file-item">
+                      <span class="file-icon">📄</span>
+                      <div class="file-meta">
+                        <span class="file-name">{{ f.file.name }}</span>
+                        <span class="file-type">{{ inferDataTypeLabel(f.file.name) }}</span>
+                      </div>
+                      <span class="file-size">{{ formatSize(f.file.size) }}</span>
+                      <button class="file-remove" @click.stop="removeFile(i)" :disabled="uploading">✕</button>
+                    </div>
                   </div>
+                  <p class="drop-hint" style="margin-top:8px">点击继续添加文件</p>
                 </template>
               </div>
             </div>
 
-            <!-- 自动识别的数据类型 -->
-            <div v-if="selectedFile" class="detected-type">
-              <span class="detected-label">识别类型：</span>
-              <span class="detected-value">{{ detectedType }}</span>
+            <!-- 上传进度：逐文件展示 -->
+            <div v-if="uploading" class="upload-status">
+              <div class="status-header">
+                <span>{{ statusText }}</span>
+                <span>{{ completedCount }} / {{ totalCount }}</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" :style="{ width: overallProgress + '%' }"></div>
+              </div>
+              <!-- 逐文件结果 -->
+              <div v-for="(fr, i) in fileResults" :key="i" :class="['file-result', fr.error ? 'fr-error' : 'fr-ok']">
+                <span class="fr-icon">{{ fr.error ? '✗' : '✓' }}</span>
+                <span class="fr-name">{{ fr.filename }}</span>
+                <span class="fr-msg">{{ fr.error ? fr.message : fr.imported_rows + ' 条' }}</span>
+              </div>
             </div>
 
-            <!-- 上传进度 -->
-            <div v-if="uploading" class="progress-bar">
-              <div class="progress-fill" :style="{ width: progress + '%' }"></div>
-            </div>
-
-            <!-- 结果提示 -->
-            <div v-if="result" :class="['result-box', result.error ? 'result-error' : 'result-success']">
-              <template v-if="result.error">
-                <span>导入失败：{{ result.message }}</span>
-              </template>
-              <template v-else>
-                <span>导入成功！共 {{ result.imported_rows }} 条记录</span>
-                <span v-if="result.before_completeness !== undefined" class="result-detail">
-                  （数据完整性：{{ result.before_completeness }}% → {{ result.after_completeness }}%）
-                </span>
-              </template>
+            <!-- 最终汇总 -->
+            <div v-if="finalResult" :class="['result-box', finalResult.hasError ? 'result-error' : 'result-success']">
+              <span>导入完成：{{ finalResult.okCount }}/{{ finalResult.total }} 个文件成功，共 {{ finalResult.totalRows }} 条记录</span>
             </div>
 
             <!-- CSV 模板帮助 -->
@@ -82,14 +87,23 @@
           </div>
 
           <div class="modal-footer">
-            <button class="btn-cancel" @click="close">取消</button>
             <button
-              :class="['btn-upload', { disabled: !selectedFile || uploading }]"
-              :disabled="!selectedFile || uploading"
-              @click="doUpload"
+              class="btn-reimport"
+              :disabled="reimporting || !hasLastUpload"
+              @click="doReimport"
             >
-              {{ uploading ? '上传中...' : '开始导入' }}
+              {{ reimporting ? '导入中...' : '⚡ 一键导入上次数据' }}
             </button>
+            <div class="footer-right">
+              <button class="btn-cancel" @click="close" :disabled="uploading">取消</button>
+              <button
+                :class="['btn-upload', { disabled: files.length === 0 || uploading }]"
+                :disabled="files.length === 0 || uploading"
+                @click="doUpload"
+              >
+                {{ uploading ? '上传中...' : `开始导入 (${files.length} 个文件)` }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -106,18 +120,33 @@ defineProps({
 });
 const emit = defineEmits(["close", "uploaded"]);
 
-const selectedFile = ref(null);
+const files = ref([]);
 const isDragover = ref(false);
 const uploading = ref(false);
-const progress = ref(0);
-const result = ref(null);
+const reimporting = ref(false);
+const completedCount = ref(0);
+const totalCount = ref(0);
+const fileResults = ref([]);
+const finalResult = ref(null);
 
-const detectedType = computed(() => {
-  if (!selectedFile.value) return "";
-  const name = selectedFile.value.name.toLowerCase();
-  if (/weather|气象|weather|气候/.test(name)) return "weather（气象数据）";
-  if (/equipment|设备|设备|机器/.test(name)) return "equipment（设备数据）";
-  return "emission（废气排放数据）";
+// 检查是否有上次上传记录
+const hasLastUpload = computed(() => {
+  try {
+    const types = JSON.parse(localStorage.getItem("gas_last_upload") || "[]");
+    return types.length > 0;
+  } catch {
+    return false;
+  }
+});
+
+const overallProgress = computed(() => {
+  if (totalCount.value === 0) return 0;
+  return Math.round((completedCount.value / totalCount.value) * 100);
+});
+
+const statusText = computed(() => {
+  if (totalCount.value === 0) return "准备中...";
+  return `正在导入第 ${completedCount.value + 1} / ${totalCount.value} 个文件`;
 });
 
 function inferDataType(filename) {
@@ -127,61 +156,135 @@ function inferDataType(filename) {
   return "emission";
 }
 
+function inferDataTypeLabel(filename) {
+  const map = { weather: "气象数据", equipment: "设备数据", emission: "排放数据" };
+  return map[inferDataType(filename)] || "排放数据";
+}
+
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + " B";
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
   return (bytes / 1048576).toFixed(1) + " MB";
 }
 
+function addFiles(fileList) {
+  for (let i = 0; i < fileList.length; i++) {
+    const f = fileList[i];
+    // 去重：同名同大小视为重复
+    const dup = files.value.find((x) => x.file.name === f.name && x.file.size === f.size);
+    if (!dup) {
+      files.value.push({ file: f });
+    }
+  }
+  finalResult.value = null;
+  fileResults.value = [];
+}
+
 function onFileChange(e) {
-  const file = e.target.files[0];
-  if (file) {
-    selectedFile.value = file;
-    result.value = null;
+  if (e.target.files.length > 0) {
+    addFiles(e.target.files);
+    e.target.value = "";
   }
 }
 
 function onDrop(e) {
   isDragover.value = false;
-  const file = e.dataTransfer.files[0];
-  if (file) {
-    selectedFile.value = file;
-    result.value = null;
+  if (e.dataTransfer.files.length > 0) {
+    addFiles(e.dataTransfer.files);
   }
 }
 
-function removeFile() {
-  selectedFile.value = null;
-  result.value = null;
+function removeFile(index) {
+  files.value.splice(index, 1);
+  finalResult.value = null;
 }
 
 async function doUpload() {
-  if (!selectedFile.value || uploading.value) return;
+  if (files.value.length === 0 || uploading.value) return;
 
   uploading.value = true;
-  progress.value = 30;
-  result.value = null;
-  const dataType = inferDataType(selectedFile.value.name);
+  completedCount.value = 0;
+  totalCount.value = files.value.length;
+  fileResults.value = [];
+  finalResult.value = null;
 
+  let totalRows = 0;
+  let okCount = 0;
+  let hasError = false;
+
+  for (let i = 0; i < files.value.length; i++) {
+    const { file } = files.value[i];
+    const dataType = inferDataType(file.name);
+
+    try {
+      const res = await api.uploadData(file, dataType);
+      totalRows += res.imported_rows || 0;
+      okCount++;
+      fileResults.value.push({
+        filename: file.name,
+        error: false,
+        imported_rows: res.imported_rows,
+        message: `导入成功`,
+      });
+      // 记录到 localStorage
+      const types = JSON.parse(localStorage.getItem("gas_last_upload") || "[]");
+      if (!types.includes(dataType)) types.push(dataType);
+      localStorage.setItem("gas_last_upload", JSON.stringify(types));
+    } catch (err) {
+      hasError = true;
+      const msg = err?.response?.data?.error || err?.message || "网络错误";
+      fileResults.value.push({
+        filename: file.name,
+        error: true,
+        message: msg,
+      });
+    }
+    completedCount.value = i + 1;
+  }
+
+  finalResult.value = { total: files.value.length, okCount, totalRows, hasError };
+  files.value = [];
+  uploading.value = false;
+  if (totalRows > 0) emit("uploaded", { imported_rows: totalRows });
+}
+
+async function doReimport() {
+  if (reimporting.value) return;
+  reimporting.value = true;
+  finalResult.value = null;
+  fileResults.value = [];
   try {
-    const res = await api.uploadData(selectedFile.value, dataType);
-    progress.value = 100;
-    result.value = { error: false, ...res };
-    selectedFile.value = null;
+    const res = await api.reimportData();
+    const detail = res.results || {};
+    for (const [type, r] of Object.entries(detail)) {
+      fileResults.value.push({
+        filename: type,
+        error: !!r.error,
+        imported_rows: r.imported_rows || 0,
+        message: r.error || "导入成功",
+      });
+    }
+    finalResult.value = {
+      total: Object.keys(detail).length,
+      okCount: Object.values(detail).filter((r) => !r.error).length,
+      totalRows: res.total_imported || 0,
+      hasError: false,
+    };
     emit("uploaded", res);
   } catch (err) {
-    progress.value = 0;
     const msg = err?.response?.data?.error || err?.message || "网络错误";
-    result.value = { error: true, message: msg };
+    finalResult.value = { total: 1, okCount: 0, totalRows: 0, hasError: true };
+    fileResults.value.push({ filename: "一键导入", error: true, message: msg });
   } finally {
-    uploading.value = false;
+    reimporting.value = false;
   }
 }
 
 function close() {
-  selectedFile.value = null;
-  result.value = null;
-  progress.value = 0;
+  if (uploading.value) return;
+  files.value = [];
+  fileResults.value = [];
+  finalResult.value = null;
   emit("close");
 }
 </script>
@@ -199,11 +302,13 @@ function close() {
 .modal-panel {
   background: #16203a;
   border-radius: 16px;
-  width: 520px;
+  width: 540px;
   max-width: 95vw;
+  max-height: 85vh;
   border: 1px solid #2a3852;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .modal-header {
   display: flex;
@@ -211,6 +316,7 @@ function close() {
   align-items: center;
   padding: 18px 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
 }
 .modal-header h3 { font-size: 16px; font-weight: 600; color: #e0e6f0; margin: 0; }
 .modal-close {
@@ -218,7 +324,7 @@ function close() {
   cursor: pointer; padding: 0 4px; line-height: 1;
 }
 .modal-close:hover { color: #e0e6f0; }
-.modal-body { padding: 20px 24px; }
+.modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
 .form-group { margin-bottom: 18px; }
 .form-label { display: block; font-size: 13px; font-weight: 600; color: #8b98b0; margin-bottom: 8px; }
 
@@ -234,38 +340,57 @@ function close() {
 .drop-zone.dragover { border-color: #2e7bcf; background: rgba(46, 123, 207, 0.06); }
 .drop-zone.hasFile {
   border-color: #10b981; border-style: solid;
-  background: rgba(16, 185, 129, 0.06); padding: 16px;
+  background: rgba(16, 185, 129, 0.06); padding: 12px 16px;
 }
 .drop-icon { font-size: 32px; margin-bottom: 8px; }
 .drop-text { font-size: 13px; color: #c0d0e8; margin: 4px 0; }
 .drop-hint { font-size: 11px; color: #576580; margin: 4px 0; }
 
-.file-info { display: flex; align-items: center; gap: 10px; }
-.file-icon { font-size: 20px; }
-.file-name { font-size: 13px; color: #e0e6f0; flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-size { font-size: 11px; color: #576580; }
+/* 多文件列表 */
+.file-list { display: flex; flex-direction: column; gap: 8px; }
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 8px 12px;
+  text-align: left;
+}
+.file-icon { font-size: 18px; flex-shrink: 0; }
+.file-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.file-name { font-size: 13px; color: #e0e6f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-type { font-size: 11px; color: #00d4ff; }
+.file-size { font-size: 11px; color: #576580; white-space: nowrap; flex-shrink: 0; }
 .file-remove {
   background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3);
   color: #f87171; border-radius: 50%; width: 24px; height: 24px;
   font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
 }
-.file-remove:hover { background: rgba(239, 68, 68, 0.25); }
+.file-remove:hover:not(:disabled) { background: rgba(239, 68, 68, 0.25); }
+.file-remove:disabled { opacity: 0.3; cursor: not-allowed; }
 
-.detected-type {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 14px; background: rgba(46, 123, 207, 0.08);
-  border: 1px solid rgba(46, 123, 207, 0.2); border-radius: 8px; margin-top: 12px;
-}
-.detected-label { font-size: 12px; color: #6b7a94; }
-.detected-value { font-size: 13px; color: #00d4ff; font-weight: 600; }
+/* 上传状态 */
+.upload-status { margin-top: 12px; }
+.status-header { display: flex; justify-content: space-between; font-size: 12px; color: #8b98b0; margin-bottom: 6px; }
 
-.progress-bar { height: 4px; background: rgba(255, 255, 255, 0.06); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.progress-bar { height: 4px; background: rgba(255, 255, 255, 0.06); border-radius: 2px; margin-bottom: 10px; overflow: hidden; }
 .progress-fill { height: 100%; background: linear-gradient(90deg, #00d4ff, #2e7bcf); border-radius: 2px; transition: width 0.3s; }
+
+.file-result { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; margin-bottom: 4px; font-size: 12px; }
+.fr-ok { background: rgba(16, 185, 129, 0.08); }
+.fr-error { background: rgba(239, 68, 68, 0.08); }
+.fr-icon { width: 16px; text-align: center; font-weight: 700; flex-shrink: 0; }
+.fr-ok .fr-icon { color: #10b981; }
+.fr-error .fr-icon { color: #f87171; }
+.fr-name { flex: 1; color: #c0d0e8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-msg { color: #6b7a94; white-space: nowrap; flex-shrink: 0; }
 
 .result-box { margin-top: 12px; padding: 10px 14px; border-radius: 8px; font-size: 13px; }
 .result-success { background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); }
 .result-error { background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); }
-.result-detail { display: block; font-size: 11px; opacity: 0.8; margin-top: 4px; }
 
 .template-help { margin-top: 16px; font-size: 12px; color: #6b7a94; cursor: pointer; }
 .template-help summary { margin-bottom: 8px; }
@@ -278,17 +403,37 @@ function close() {
   font-family: Consolas, monospace; word-break: break-all;
 }
 
-.modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.modal-footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 24px; border-top: 1px solid rgba(255, 255, 255, 0.06); flex-shrink: 0; }
+.footer-right { display: flex; gap: 10px; }
 .btn-cancel {
   padding: 8px 20px; background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1); color: #c0d0e8;
   border-radius: 8px; font-size: 13px; cursor: pointer; transition: background 0.2s;
 }
 .btn-cancel:hover { background: rgba(255, 255, 255, 0.1); }
+.btn-cancel:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-reimport {
+  padding: 8px 18px;
+  background: rgba(0, 212, 255, 0.08);
+  color: #00d4ff;
+  border: 1px dashed rgba(0, 212, 255, 0.35);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn-reimport:hover:not(:disabled) {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: #00d4ff;
+  border-style: solid;
+}
+.btn-reimport:disabled { opacity: 0.35; cursor: not-allowed; }
 .btn-upload {
   padding: 8px 24px; background: linear-gradient(135deg, #00d4ff, #009cbb);
   color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600;
-  cursor: pointer; transition: opacity 0.2s;
+  cursor: pointer; transition: opacity 0.2s; white-space: nowrap;
 }
 .btn-upload:hover:not(.disabled) { opacity: 0.85; }
 .btn-upload.disabled { opacity: 0.4; cursor: not-allowed; }
