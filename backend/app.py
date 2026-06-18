@@ -414,6 +414,7 @@ def report_export():
         records = sorted(records, key=lambda r: r.timestamp)
 
         output = io.StringIO()
+        output.write('﻿')  # UTF-8 BOM，确保 Excel 正确识别中文编码
         writer = csv.writer(output)
         writer.writerow(['时间', 'VOCs浓度(mg/m³)', 'NOx浓度(mg/m³)', 'SO2浓度(mg/m³)'])
 
