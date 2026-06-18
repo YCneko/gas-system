@@ -18,6 +18,9 @@
         <button class="export-btn" :disabled="exporting" @click="handleExport">
           {{ exporting ? "导出中..." : "📄 导出报告" }}
         </button>
+        <button class="demo-toggle" :class="{ active: demoMode }" @click="demoMode = !demoMode">
+          🔬 {{ demoMode ? '退出演示' : '演示模式' }}
+        </button>
         <span class="status-badge">● 运行中</span>
         <span class="clock">{{ currentTime }}</span>
       </div>
@@ -84,7 +87,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted, provide } from "vue";
 import DataCard from "@/components/DataCard.vue";
 import AlertList from "@/components/AlertList.vue";
 import PredictionChart from "@/components/PredictionChart.vue";
@@ -112,9 +115,32 @@ const currentTime = ref(new Date().toLocaleString());
 const exporting = ref(false);
 
 // ========================
+// 演示模式
+// ========================
+const demoMode = ref(false);
+provide("demoMode", demoMode);
+
+// ========================
 // 实时数据轮询（每 5 秒）
 // ========================
 const fetchRealtimeData = async () => {
+  // 演示模式：生成随机模拟数据，不调用后端 API
+  if (demoMode.value) {
+    indicators.value[0].value = parseFloat((Math.random() * 2 + 0.3).toFixed(2));
+    indicators.value[1].value = parseFloat((Math.random() * 5 + 22).toFixed(1));
+    indicators.value[2].value = Math.floor(Math.random() * 15 + 58);
+    indicators.value[3].value = parseFloat((Math.random() * 1.5 + 0.5).toFixed(1));
+    // 模拟各组分浓度
+    components.value[0].value = parseFloat((Math.random() * 0.4 + 0.1).toFixed(2));
+    components.value[1].value = parseFloat((Math.random() * 0.3 + 0.05).toFixed(2));
+    components.value[2].value = parseFloat((Math.random() * 0.2 + 0.03).toFixed(2));
+    components.value.forEach(c => {
+      c.percentage = Math.min((c.value / 200) * 100, 100);
+    });
+    latestUpdate.value = new Date().toLocaleTimeString() + " [演示]";
+    return;
+  }
+
   try {
     const res = await api.getRealtimeData();
     indicators.value[0].value = res.voc ?? 0;
@@ -213,8 +239,8 @@ onUnmounted(() => {
   height: 100%;
   display: grid;
   grid-template-rows: auto 1fr;
-  background: linear-gradient(135deg, #0a0f1a 0%, #0d1422 100%);
-  color: #e0e6f0;
+  background: linear-gradient(135deg, #f0f4f8 0%, #e8f0fe 100%);
+  color: #1a202c;
   font-family: "Segoe UI", "PingFang SC", sans-serif;
   overflow: hidden;
 }
@@ -227,10 +253,10 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 18px 32px;
-  background: rgba(15, 23, 42, 0.7);
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(46, 123, 207, 0.2);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   z-index: 10;
   flex-shrink: 0;
 }
@@ -259,7 +285,7 @@ onUnmounted(() => {
   font-size: 26px;
   font-weight: 700;
   letter-spacing: 1px;
-  background: linear-gradient(to right, #fff, #8bb9ff);
+  background: linear-gradient(to right, #1e3a8a, #2563eb);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -268,7 +294,7 @@ onUnmounted(() => {
 
 .subtitle {
   font-size: 13px;
-  color: #6c7a93;
+  color: #64748b;
   margin-top: 2px;
 }
 
@@ -280,7 +306,7 @@ onUnmounted(() => {
 }
 
 .status-badge {
-  background: rgba(16, 185, 129, 0.15);
+  background: rgba(16, 185, 129, 0.1);
   color: #10b981;
   padding: 6px 16px;
   border-radius: 20px;
@@ -293,8 +319,8 @@ onUnmounted(() => {
 .clock {
   font-size: 15px;
   font-weight: 500;
-  color: #8b98b0;
-  background: rgba(255, 255, 255, 0.05);
+  color: #475569;
+  background: rgba(0, 0, 0, 0.03);
   padding: 8px 18px;
   border-radius: 8px;
   font-variant-numeric: tabular-nums;
@@ -320,6 +346,34 @@ onUnmounted(() => {
 .export-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 演示模式切换按钮 */
+.demo-toggle {
+  padding: 8px 20px;
+  background: #ffffff;
+  color: #2563eb;
+  border: 1.5px solid #93c5fd;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  white-space: nowrap;
+}
+.demo-toggle:hover {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.05);
+}
+.demo-toggle.active {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  border-color: #2563eb;
+  animation: demo-pulse 2s ease-in-out infinite;
+}
+@keyframes demo-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
 }
 
 /* ===== 主体网格 ===== */
@@ -349,11 +403,11 @@ onUnmounted(() => {
 
 /* ===== 面板 ===== */
 .panel {
-  background: rgba(18, 26, 46, 0.6);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(6px);
   border-radius: 16px;
-  border: 1px solid rgba(46, 123, 207, 0.15);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -365,20 +419,20 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 18px 22px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid #f1f5f9;
+  background: rgba(0, 0, 0, 0.02);
   flex-shrink: 0;
 }
 
 .panel-header h3 {
   font-size: 15px;
   font-weight: 600;
-  color: #cdd6f0;
+  color: #1e293b;
 }
 
 .panel-meta {
   font-size: 13px;
-  color: #576580;
+  color: #94a3b8;
 }
 
 .chart-panel .chart-container {
@@ -400,7 +454,7 @@ onUnmounted(() => {
   background: transparent;
 }
 .alert-container::-webkit-scrollbar-thumb {
-  background: #2e3a56;
+  background: #cbd5e1;
   border-radius: 10px;
 }
 
@@ -431,7 +485,7 @@ onUnmounted(() => {
 .comp-name {
   font-size: 13px;
   font-weight: 600;
-  color: #cdd6f0;
+  color: #334155;
   letter-spacing: 0.5px;
 }
 
@@ -444,19 +498,19 @@ onUnmounted(() => {
 .comp-value {
   font-size: 20px;
   font-weight: 700;
-  color: #00d4ff;
+  color: #2563eb;
   font-variant-numeric: tabular-nums;
 }
 
 .comp-unit {
   font-size: 11px;
-  color: #6b7a94;
+  color: #64748b;
 }
 
 /* 进度条 */
 .comp-bar {
   height: 6px;
-  background: rgba(255, 255, 255, 0.08);
+  background: #e2e8f0;
   border-radius: 3px;
   overflow: hidden;
 }
@@ -464,7 +518,7 @@ onUnmounted(() => {
 .comp-fill {
   height: 100%;
   border-radius: 3px;
-  background: linear-gradient(90deg, #00d4ff, #009cbb);
+  background: linear-gradient(90deg, #2563eb, #0ea5e9);
   transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 0;
 }
@@ -497,6 +551,11 @@ onUnmounted(() => {
 
   .export-btn {
     padding: 6px 16px;
+    font-size: 13px;
+  }
+
+  .demo-toggle {
+    padding: 6px 14px;
     font-size: 13px;
   }
 
@@ -548,7 +607,7 @@ onUnmounted(() => {
   .system-name {
     font-size: 18px;
     white-space: normal;
-    -webkit-text-fill-color: #fff;
+    -webkit-text-fill-color: #1e3a8a;
     background: none;
   }
 
@@ -584,6 +643,11 @@ onUnmounted(() => {
   .export-btn {
     font-size: 12px;
     padding: 5px 14px;
+  }
+
+  .demo-toggle {
+    font-size: 12px;
+    padding: 5px 12px;
   }
 
   .main-content {

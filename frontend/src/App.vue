@@ -21,6 +21,9 @@
       </svg>
       关于
     </router-link>
+    <router-link to="/training" class="nav-link" active-class="nav-active">
+      🧠 模型训练
+    </router-link>
   </nav>
 
   <!-- 页面切换过渡动画 -->
@@ -54,8 +57,8 @@ body {
   font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #0a0f1a;
-  color: #e0e6f0;
+  background: #f0f4f8;
+  color: #1a202c;
 }
 
 #app {
@@ -70,9 +73,9 @@ body {
   align-items: center;
   gap: 4px;
   padding: 10px 24px;
-  background: rgba(15, 23, 42, 0.85);
+  background: #ffffff;
   backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(46, 123, 207, 0.15);
+  border-bottom: 1px solid #e2e8f0;
   z-index: 100;
   flex-shrink: 0;
 }
@@ -82,7 +85,7 @@ body {
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  color: #6b7a94;
+  color: #4a5568;
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
@@ -91,13 +94,13 @@ body {
 }
 
 .nav-link:hover {
-  color: #cdd6f0;
-  background: rgba(255, 255, 255, 0.05);
+  color: #1e3a8a;
+  background: rgba(37, 99, 235, 0.05);
 }
 
 .nav-active {
-  color: #00d4ff !important;
-  background: rgba(0, 212, 255, 0.08);
+  color: #2563eb !important;
+  background: rgba(37, 99, 235, 0.08);
 }
 
 /* ===== 页面过渡动画 ===== */

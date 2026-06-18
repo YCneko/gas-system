@@ -439,6 +439,185 @@ def report_export():
         return jsonify({'error': True, 'message': str(e)}), 500
 
 
+# ---------- 演示数据接口: GET /api/demo/alerts ----------
+@app.route('/api/demo/alerts', methods=['GET'])
+def demo_alerts():
+    """返回模拟预警数据（高/中/低三级，共6条）"""
+    try:
+        now = datetime.now()
+        # 构建6条模拟预警记录：2条高、2条中、2条低
+        alerts = [
+            {
+                'id': 1,
+                'time': (now - pd.Timedelta(hours=2)).strftime('%m/%d %H:%M'),
+                'metric': 'VOCs浓度',
+                'level': 'error',
+                'detail': '预测未来1小时VOCs浓度将严重超标，建议立即检查排放设备',
+                'predicted_exceedance_time': (now + pd.Timedelta(hours=1)).isoformat(),
+                'predicted_value': 125.3,
+            },
+            {
+                'id': 2,
+                'time': (now - pd.Timedelta(hours=1)).strftime('%m/%d %H:%M'),
+                'metric': 'VOCs浓度',
+                'level': 'error',
+                'detail': '预测未来2小时VOCs浓度将严重超标，建议密切关注排放数据',
+                'predicted_exceedance_time': (now + pd.Timedelta(hours=2)).isoformat(),
+                'predicted_value': 118.7,
+            },
+            {
+                'id': 3,
+                'time': now.strftime('%m/%d %H:%M'),
+                'metric': 'VOCs浓度',
+                'level': 'warn',
+                'detail': '预测未来1小时VOCs浓度接近限值，请注意监控',
+                'predicted_exceedance_time': (now + pd.Timedelta(hours=1)).isoformat(),
+                'predicted_value': 105.2,
+            },
+            {
+                'id': 4,
+                'time': (now - pd.Timedelta(hours=3)).strftime('%m/%d %H:%M'),
+                'metric': 'VOCs浓度',
+                'level': 'warn',
+                'detail': '预测未来3小时VOCs浓度可能超标，建议提前排查',
+                'predicted_exceedance_time': (now + pd.Timedelta(hours=3)).isoformat(),
+                'predicted_value': 102.8,
+            },
+            {
+                'id': 5,
+                'time': (now - pd.Timedelta(hours=5)).strftime('%m/%d %H:%M'),
+                'metric': 'VOCs浓度',
+                'level': 'info',
+                'detail': 'VOCs浓度略有波动，当前处于安全范围内',
+                'predicted_exceedance_time': (now + pd.Timedelta(hours=1)).isoformat(),
+                'predicted_value': 92.1,
+            },
+            {
+                'id': 6,
+                'time': (now - pd.Timedelta(hours=4)).strftime('%m/%d %H:%M'),
+                'metric': 'VOCs浓度',
+                'level': 'info',
+                'detail': 'VOCs浓度正常，持续监控中',
+                'predicted_exceedance_time': (now + pd.Timedelta(hours=2)).isoformat(),
+                'predicted_value': 88.5,
+            },
+        ]
+        return jsonify(alerts), 200
+    except Exception as e:
+        return jsonify({'error': True, 'message': f'获取演示预警数据失败: {str(e)}'}), 500
+
+
+# ---------- 演示数据接口: GET /api/demo/prediction ----------
+@app.route('/api/demo/prediction', methods=['GET'])
+def demo_prediction():
+    """返回模拟的历史+预测曲线数据"""
+    try:
+        now = datetime.now()
+        # 模拟历史24小时数据（值在40-80之间波动）
+        history = []
+        for i in range(23, -1, -1):
+            t = now - pd.Timedelta(hours=i)
+            # 使用正弦波模拟日周期波动，叠加随机噪声
+            base = 60 + 15 * np.sin(2 * np.pi * (23 - i) / 24)
+            noise = np.random.uniform(-8, 8)
+            value = round(float(max(35, min(85, base + noise))), 1)
+            history.append({
+                'time': t.strftime('%m/%d %H:%M'),
+                'value': value,
+            })
+
+        # 模拟未来6小时预测数据
+        # 第3、4个点故意超过100，体现预警效果
+        prediction_values = [78.5, 92.3, 118.6, 122.4, 85.7, 72.1]
+        prediction = []
+        for i, val in enumerate(prediction_values):
+            t = now + pd.Timedelta(hours=i + 1)
+            prediction.append({
+                'time': t.strftime('%m/%d %H:%M'),
+                'value': val,
+            })
+
+        alert_info = {
+            'triggered': True,
+            'level': '中',
+            'exceed_count': 2,
+        }
+
+        return jsonify({
+            'history': history,
+            'prediction': prediction,
+            'alert': alert_info,
+        }), 200
+    except Exception as e:
+        return jsonify({'error': True, 'message': f'获取演示预测数据失败: {str(e)}'}), 500
+
+
+# ---------- 模型元信息接口: GET /api/model/info ----------
+@app.route('/api/model/info', methods=['GET'])
+def model_info():
+    """返回当前模型的静态元信息（匹配 train_real_model.py 的实际参数）"""
+    try:
+        info = {
+            'architecture': 'LSTM 2层 (128 → 64 → 6)',
+            'parameters': 125000,
+            'lookback': 24,
+            'forecast_horizon': 6,
+            'features': 14,
+            'feature_list': [
+                'temperature', 'humidity', 'wind_speed', 'operating_load',
+                'hour_sin', 'hour_cos', 'day_of_week_sin', 'day_of_week_cos',
+                'is_workday', 'voc_lag_1h', 'voc_lag_3h', 'voc_lag_6h',
+                'voc_rolling_6h_mean', 'voc_rolling_6h_std',
+            ],
+            'training_samples': 4332,
+            'loss_function': 'MSE',
+            'optimizer': 'Adam (lr=0.001)',
+            'dropout': 0.2,
+            'trained_at': '2026-06-18',
+        }
+        return jsonify(info), 200
+    except Exception as e:
+        return jsonify({'error': True, 'message': f'获取模型信息失败: {str(e)}'}), 500
+
+
+# ---------- 训练指标对比接口: GET /api/model/metrics ----------
+@app.route('/api/model/metrics', methods=['GET'])
+def model_metrics():
+    """返回多个训练版本的指标对比数据"""
+    try:
+        data = {
+            'versions': [
+                {
+                    'name': 'V1 (生产)',
+                    'strategy': 'MSE + 24步 + 14特征',
+                    'r2': 0.9217,
+                    'mae': 8.11,
+                    'mape': 46.49,
+                    'rmse': 14.5,
+                },
+                {
+                    'name': 'V2',
+                    'strategy': 'MAE + 48步 + BN + 18特征',
+                    'r2': 0.9140,
+                    'mae': 8.48,
+                    'mape': 40.10,
+                    'rmse': 16.2,
+                },
+                {
+                    'name': 'V3',
+                    'strategy': 'Weighted MAE + CosineLR',
+                    'r2': 0.0449,
+                    'mae': 27.0,
+                    'mape': 70.42,
+                    'rmse': 38.1,
+                },
+            ],
+            'current_version': 'V1 (生产)',
+            'training_time': '~120秒 (RTX 4060)',
+        }
+        return jsonify(data), 200
+    except Exception as e:
+        return jsonify({'error': True, 'message': f'获取训练指标失败: {str(e)}'}), 500
 
 
 if __name__ == '__main__':

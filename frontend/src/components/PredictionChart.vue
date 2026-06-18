@@ -20,10 +20,13 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from "vue";
+import { computed, ref, onMounted, onUnmounted, inject } from "vue";
 import VChart from "vue-echarts";
 import SkeletonChart from "@/components/SkeletonChart.vue";
 import api from "@/utils/api";
+
+// 演示模式（从父组件注入，用于展示模拟数据）
+const demoMode = inject("demoMode", ref(false));
 
 // ========== ECharts 按需引入 ==========
 import { use } from "echarts/core";
@@ -63,7 +66,13 @@ const error = ref(false);
 const fetchData = async () => {
   if (!error.value) loading.value = true;
   try {
-    const res = await api.getPrediction();
+    let res;
+    if (demoMode.value) {
+      // 演示模式：调用演示数据 API
+      res = await api.getDemoPrediction();
+    } else {
+      res = await api.getPrediction();
+    }
     historyData.value = res.history || [];
     predictionData.value = res.prediction || [];
     error.value = false;
@@ -117,9 +126,9 @@ const chartOption = computed(() => {
 
     tooltip: {
       trigger: "axis",
-      backgroundColor: "rgba(20, 28, 45, 0.92)",
-      borderColor: "#2e7bcf",
-      textStyle: { color: "#e0e6f0", fontSize: 13 },
+      backgroundColor: "rgba(255, 255, 255, 0.95)",
+      borderColor: "#2563eb",
+      textStyle: { color: "#1e293b", fontSize: 13 },
       formatter: (params) => {
         let html = `<div style="font-weight:600;margin-bottom:6px;">${params[0].axisValue}</div>`;
         params.forEach((p) => {
@@ -135,7 +144,7 @@ const chartOption = computed(() => {
     },
     legend: {
       data: ["历史浓度", "预测浓度", "限值"],
-      textStyle: { color: "#8b98b0", fontSize: 12 },
+      textStyle: { color: "#64748b", fontSize: 12 },
       top: 8,
       icon: "roundRect",
     },
@@ -150,21 +159,21 @@ const chartOption = computed(() => {
       data: xAxisData,
       boundaryGap: false,
       axisLabel: {
-        color: "#8b98b0",
+        color: "#64748b",
         fontSize: 11,
         rotate: 30,
       },
-      axisLine: { lineStyle: { color: "#2a3852" } },
+      axisLine: { lineStyle: { color: "#e2e8f0" } },
       axisTick: { show: false },
       splitLine: { show: false },
     },
     yAxis: {
       type: "value",
       name: "浓度 (mg/m³)",
-      nameTextStyle: { color: "#8b98b0", fontSize: 12 },
-      axisLabel: { color: "#8b98b0", fontSize: 11 },
+      nameTextStyle: { color: "#64748b", fontSize: 12 },
+      axisLabel: { color: "#64748b", fontSize: 11 },
       splitLine: {
-        lineStyle: { color: "#1f2a44", type: "dashed" },
+        lineStyle: { color: "#e2e8f0", type: "dashed" },
       },
     },
     series: [
@@ -177,8 +186,8 @@ const chartOption = computed(() => {
         symbol: "circle",
         symbolSize: 5,
         connectNulls: false,
-        lineStyle: { color: "#00d4ff", width: 3 },
-        itemStyle: { color: "#00d4ff" },
+        lineStyle: { color: "#2563eb", width: 3 },
+        itemStyle: { color: "#2563eb" },
         areaStyle: {
           color: {
             type: "linear",
@@ -187,8 +196,8 @@ const chartOption = computed(() => {
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: "rgba(0,212,255,0.2)" },
-              { offset: 1, color: "rgba(0,212,255,0.02)" },
+              { offset: 0, color: "rgba(37,99,235,0.15)" },
+              { offset: 1, color: "rgba(37,99,235,0.02)" },
             ],
           },
         },
@@ -228,7 +237,7 @@ const chartOption = computed(() => {
         connectNulls: true,
         symbol: "none",
         showSymbol: false,
-        lineStyle: { color: "#8b98b0", width: 2, type: "dotted" },
+        lineStyle: { color: "#94a3b8", width: 2, type: "dotted" },
         emphasis: { disabled: true },
         tooltip: { show: false },
       },

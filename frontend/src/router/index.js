@@ -14,6 +14,12 @@ const routes = [
     component: () => import("../views/AboutView.vue"),
     meta: { title: "关于" },
   },
+  {
+    path: "/training",
+    name: "training",
+    component: () => import("../views/TrainingView.vue"),
+    meta: { title: "模型训练" },
+  },
 ];
 
 const router = createRouter({

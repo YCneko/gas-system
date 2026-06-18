@@ -30,6 +30,9 @@
       </tbody>
     </table>
 
+    <!-- 演示模式标签 -->
+    <div v-if="demoMode" class="demo-badge">🔬 演示数据</div>
+
     <div v-if="!sortedAlerts.length" class="empty-state">
       <span>暂无预警信息 ✅</span>
       <span class="empty-hint">仅显示预测时间在当前时间之后的预警</span>
@@ -81,7 +84,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from "vue";
+import { computed, ref, onMounted, onUnmounted, inject } from "vue";
 import api from "@/utils/api";
 
 const list = ref([]);
@@ -90,12 +93,28 @@ const currentAlert = ref(null);
 const knownIds = ref(new Set());
 const currentTime = ref(new Date().toLocaleString());
 
+// 演示模式（从父组件注入，用于展示模拟数据）
+const demoMode = inject("demoMode", ref(false));
+
 // ========================
 // 获取预警列表
 // ========================
 const fetchAlerts = async () => {
   try {
-    const data = await api.getAlertList();
+    let data;
+    if (demoMode.value) {
+      // 演示模式：使用内嵌模拟数据（6条，涵盖 error/warn/info 三个等级）
+      data = [
+        { id: 1, time: "2026-06-18 14:30", metric: "VOCs浓度", level: "error", detail: "预测浓度将达到 12.5 mg/m³，超过限值 80%", predicted_exceedance_time: "2026-06-18 14:30" },
+        { id: 2, time: "2026-06-18 15:00", metric: "VOCs浓度", level: "warn", detail: "预测浓度将达到 8.2 mg/m³，接近限值", predicted_exceedance_time: "2026-06-18 15:00" },
+        { id: 3, time: "2026-06-18 15:45", metric: "温度", level: "info", detail: "温度略有上升趋势，当前正常", predicted_exceedance_time: "2026-06-18 15:45" },
+        { id: 4, time: "2026-06-18 16:20", metric: "VOCs浓度", level: "error", detail: "预测浓度将达到 14.1 mg/m³，严重超标", predicted_exceedance_time: "2026-06-18 16:20" },
+        { id: 5, time: "2026-06-18 17:10", metric: "湿度", level: "info", detail: "湿度变化趋势正常，无需关注", predicted_exceedance_time: "2026-06-18 17:10" },
+        { id: 6, time: "2026-06-18 18:00", metric: "VOCs浓度", level: "warn", detail: "预测浓度将达到 7.8 mg/m³，接近限值", predicted_exceedance_time: "2026-06-18 18:00" },
+      ];
+    } else {
+      data = await api.getAlertList();
+    }
     const newList = Array.isArray(data) ? data : [];
 
     // 更新当前时间
@@ -199,7 +218,7 @@ onUnmounted(() => {
 <style scoped>
 .alert-list {
   width: 100%;
-  color: #cbd5e1;
+  color: #334155;
   font-size: 14px;
 }
 
@@ -211,11 +230,11 @@ onUnmounted(() => {
 
 th {
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.03);
+  background: #f8fafc;
   text-align: left;
-  color: #8b98b0;
+  color: #475569;
   font-weight: 600;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid #e2e8f0;
   position: sticky;
   top: 0;
   z-index: 1;
@@ -224,7 +243,7 @@ th {
 
 td {
   padding: 11px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid #f1f5f9;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -235,7 +254,7 @@ tr {
   transition: background 0.2s;
 }
 tr:hover {
-  background: rgba(0, 212, 255, 0.06);
+  background: rgba(37, 99, 235, 0.04);
 }
 
 .detail-cell {
@@ -252,27 +271,28 @@ tr:hover {
   font-size: 12px;
   font-weight: 500;
 }
+/* 亮色主题下降低徽标饱和度 */
 .level-badge.critical,
 .level-badge.error {
-  background: rgba(245, 108, 108, 0.15);
-  color: #f56c6c;
-  border: 1px solid rgba(245, 108, 108, 0.3);
+  background: rgba(245, 108, 108, 0.1);
+  color: #e05252;
+  border: 1px solid rgba(245, 108, 108, 0.2);
 }
 .level-badge.warn,
 .level-badge.warning {
-  background: rgba(230, 162, 60, 0.15);
-  color: #e6a23c;
-  border: 1px solid rgba(230, 162, 60, 0.3);
+  background: rgba(230, 162, 60, 0.1);
+  color: #d4a017;
+  border: 1px solid rgba(230, 162, 60, 0.2);
 }
 .level-badge.normal {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.1);
+  color: #0d9488;
+  border: 1px solid rgba(16, 185, 129, 0.2);
 }
 .level-badge.info {
-  background: rgba(64, 158, 255, 0.15);
-  color: #409eff;
-  border: 1px solid rgba(64, 158, 255, 0.3);
+  background: rgba(64, 158, 255, 0.1);
+  color: #3b82f6;
+  border: 1px solid rgba(64, 158, 255, 0.2);
 }
 
 /* ---------- 新条目滑入动画 ---------- */
@@ -318,7 +338,7 @@ tr:hover {
 .empty-state {
   text-align: center;
   padding: 36px 16px 8px;
-  color: #576580;
+  color: #94a3b8;
   font-size: 14px;
   display: flex;
   flex-direction: column;
@@ -327,7 +347,19 @@ tr:hover {
 }
 .empty-hint {
   font-size: 12px;
-  color: #4a5568;
+  color: #cbd5e1;
+}
+
+/* ---------- 演示模式标签 ---------- */
+.demo-badge {
+  text-align: center;
+  padding: 6px 16px;
+  margin: 8px 16px 0;
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
+  border-radius: 8px;
+  font-size: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.15);
 }
 
 /* ---------- 当前时间指示条 ---------- */
@@ -338,14 +370,14 @@ tr:hover {
   gap: 8px;
   padding: 8px 16px 12px;
   font-size: 12px;
-  color: #6b7a94;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  color: #64748b;
+  border-top: 1px solid #e2e8f0;
 }
 .time-icon {
   font-size: 14px;
 }
 .filter-note {
-  color: #4a5568;
+  color: #94a3b8;
   font-size: 11px;
 }
 
@@ -361,13 +393,13 @@ tr:hover {
 }
 
 .modal-panel {
-  background: #16203a;
+  background: #ffffff;
   border-radius: 16px;
   min-width: 400px;
   max-width: 500px;
-  color: #e0e6f0;
-  border: 1px solid #2a3852;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  color: #1e293b;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
   overflow: hidden;
 }
 
@@ -376,7 +408,7 @@ tr:hover {
   justify-content: space-between;
   align-items: center;
   padding: 18px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid #e2e8f0;
 }
 .modal-header h3 {
   font-size: 16px;
@@ -387,14 +419,14 @@ tr:hover {
 .modal-close {
   background: none;
   border: none;
-  color: #6b7a94;
+  color: #94a3b8;
   font-size: 24px;
   cursor: pointer;
   padding: 0 4px;
   line-height: 1;
 }
 .modal-close:hover {
-  color: #e0e6f0;
+  color: #1e293b;
 }
 
 .modal-body {
@@ -408,13 +440,13 @@ tr:hover {
   align-items: baseline;
 }
 .detail-row .label {
-  color: #6b7a94;
+  color: #64748b;
   min-width: 50px;
   font-size: 14px;
   flex-shrink: 0;
 }
 .detail-row .value {
-  color: #e0e6f0;
+  color: #334155;
   font-size: 14px;
 }
 .detail-full .value {
@@ -424,13 +456,13 @@ tr:hover {
 
 .modal-footer {
   padding: 14px 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid #e2e8f0;
   text-align: right;
 }
 
 .btn-close {
   padding: 8px 22px;
-  background: linear-gradient(135deg, #1e3a8a, #00d4ff);
+  background: #2563eb;
   color: #fff;
   border: none;
   border-radius: 8px;

@@ -87,22 +87,21 @@ const formattedValue = computed(() => {
 <style scoped>
 .data-card {
   position: relative;
-  background: rgba(21, 35, 66, 0.85);
+  background: #ffffff;
   border-radius: 16px;
   padding: 18px 22px 16px;
-  color: #fff;
-  border: 2px solid rgba(46, 123, 207, 0.3);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  color: #1e293b;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
   transition:
     border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 0.4s ease,
     transform 0.2s ease;
-  backdrop-filter: blur(6px);
 }
 
 .data-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(0, 212, 255, 0.2);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.1);
 }
 
 /* ---------- 超过阈值 ---------- */
@@ -153,7 +152,7 @@ const formattedValue = computed(() => {
 
 .card-title {
   font-size: 14px;
-  color: #9aa4bf;
+  color: #64748b;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -171,8 +170,7 @@ const formattedValue = computed(() => {
   font-size: 38px;
   font-weight: 700;
   letter-spacing: 1px;
-  color: #00d4ff;
-  text-shadow: 0 0 12px rgba(0, 212, 255, 0.3);
+  color: #2563eb;
   display: inline-block;
   font-variant-numeric: tabular-nums;
   transition:
@@ -199,19 +197,19 @@ const formattedValue = computed(() => {
 /* 超过阈值 → 数值变红 */
 .data-card.is-exceed .card-value {
   color: #f87171;
-  text-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.15);
 }
 
 .card-unit {
   font-size: 18px;
   font-weight: 500;
-  color: #6b7a94;
+  color: #94a3b8;
 }
 
 /* ---------- 底部 ---------- */
 .card-footer {
   padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid #f1f5f9;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -219,12 +217,12 @@ const formattedValue = computed(() => {
 
 .threshold-label {
   font-size: 12px;
-  color: #576580;
+  color: #94a3b8;
 }
 
 .update-indicator {
   font-size: 11px;
-  color: #00d4ff;
+  color: #2563eb;
   opacity: 0;
   transition: opacity 0.3s;
 }

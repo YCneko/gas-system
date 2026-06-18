@@ -90,6 +90,42 @@ const api = {
     });
   },
 
+  // ========== 演示模式 API（用于前端演示，不依赖后端） ==========
+
+  /**
+   * 获取演示模式预测数据
+   * @returns {Promise<{ history: Array, prediction: Array }>}
+   */
+  getDemoPrediction() {
+    return service.get("/demo/prediction");
+  },
+
+  /**
+   * 获取演示模式预警列表
+   * @returns {Promise<Array>}
+   */
+  getDemoAlerts() {
+    return service.get("/demo/alerts");
+  },
+
+  // ========== 模型相关 API ==========
+
+  /**
+   * 获取模型信息（配置、参数等）
+   * @returns {Promise<Object>}
+   */
+  getModelInfo() {
+    return service.get("/model/info");
+  },
+
+  /**
+   * 获取模型性能指标（准确率、召回率等）
+   * @returns {Promise<Object>}
+   */
+  getModelMetrics() {
+    return service.get("/model/metrics");
+  },
+
 };
 
 export default api;
