@@ -23,6 +23,7 @@
         </button>
         <span class="status-badge">● 运行中</span>
         <span class="clock">{{ currentTime }}</span>
+        <router-link to="/about" class="about-link" title="关于我们">ℹ️ 关于</router-link>
       </div>
     </header>
 
@@ -92,7 +93,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, provide } from "vue";
+import { ref, onMounted, onUnmounted, provide, watch } from "vue";
 import DataCard from "@/components/DataCard.vue";
 import AlertList from "@/components/AlertList.vue";
 import PredictionChart from "@/components/PredictionChart.vue";
@@ -124,6 +125,11 @@ const exporting = ref(false);
 // ========================
 const demoMode = ref(false);
 provide("demoMode", demoMode);
+
+// 监听演示模式切换，立即刷新数据
+watch(demoMode, () => {
+  fetchRealtimeData();
+});
 
 // ========================
 // 实时数据轮询（每 5 秒）
@@ -379,6 +385,22 @@ onUnmounted(() => {
 @keyframes demo-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
   50% { box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
+}
+
+/* 关于按钮 */
+.about-link {
+  font-size: 13px;
+  color: #94a3b8;
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.about-link:hover {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.06);
 }
 
 /* ===== 演示模式横幅 ===== */

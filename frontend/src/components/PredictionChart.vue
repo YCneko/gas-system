@@ -20,13 +20,18 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted, inject } from "vue";
+import { computed, ref, onMounted, onUnmounted, inject, watch } from "vue";
 import VChart from "vue-echarts";
 import SkeletonChart from "@/components/SkeletonChart.vue";
 import api from "@/utils/api";
 
 // 演示模式（从父组件注入，用于展示模拟数据）
 const demoMode = inject("demoMode", ref(false));
+
+// 监听演示模式切换，立即刷新预测图表
+watch(demoMode, () => {
+  fetchData();
+});
 
 // ========== ECharts 按需引入 ==========
 import { use } from "echarts/core";

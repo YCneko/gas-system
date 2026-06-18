@@ -84,7 +84,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted, inject } from "vue";
+import { computed, ref, onMounted, onUnmounted, inject, watch } from "vue";
 import api from "@/utils/api";
 
 const list = ref([]);
@@ -95,6 +95,12 @@ const currentTime = ref(new Date().toLocaleString());
 
 // 演示模式（从父组件注入，用于展示模拟数据）
 const demoMode = inject("demoMode", ref(false));
+
+// 监听演示模式切换，立即刷新预警列表
+watch(demoMode, () => {
+  knownIds.value = new Set(); // 清除已知 ID，让新数据有入场动画
+  fetchAlerts();
+});
 
 // ========================
 // 获取预警列表

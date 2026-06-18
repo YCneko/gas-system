@@ -135,14 +135,18 @@
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  background: linear-gradient(135deg, #0a0f1a 0%, #0d1422 100%);
+  background: #f0f4f8;
 }
+.about::-webkit-scrollbar { width: 6px; }
+.about::-webkit-scrollbar-track { background: transparent; }
+.about::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 
 .about-header {
   padding: 28px 40px;
-  background: rgba(15, 23, 42, 0.7);
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(46, 123, 207, 0.2);
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
 }
 .about-brand {
   display: flex;
@@ -152,23 +156,24 @@
 .brand-logo {
   width: 72px;
   height: 72px;
-  background: linear-gradient(135deg, #1e40af, #3b82f6);
+  background: linear-gradient(135deg, #1e3a8a, #2563eb);
   border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  box-shadow: 0 0 30px rgba(59, 130, 246, 0.25);
+  box-shadow: 0 0 30px rgba(37, 99, 235, 0.2);
+  flex-shrink: 0;
 }
 .about-brand h1 {
   font-size: 24px;
   font-weight: 700;
-  color: #e0e6f0;
+  color: #1e293b;
   margin: 0 0 4px;
 }
 .about-brand p {
   font-size: 13px;
-  color: #6b7a94;
+  color: #64748b;
   margin: 0;
 }
 
@@ -183,19 +188,20 @@
 .section h2 {
   font-size: 18px;
   font-weight: 700;
-  color: #cdd6f0;
+  color: #1e293b;
   margin-bottom: 14px;
   padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid #e2e8f0;
 }
 .section p {
   font-size: 14px;
   line-height: 1.8;
-  color: #8b98b0;
+  color: #475569;
   margin-bottom: 10px;
 }
 .section p strong {
-  color: #3b82f6;
+  color: #2563eb;
+  font-weight: 600;
 }
 
 .biz-grid {
@@ -204,21 +210,22 @@
   gap: 14px;
 }
 .biz-card {
-  background: rgba(18, 26, 46, 0.6);
-  backdrop-filter: blur(6px);
-  border: 1px solid rgba(59, 130, 246, 0.12);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 18px 14px;
   text-align: center;
   transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
 }
 .biz-card:hover {
-  border-color: rgba(59, 130, 246, 0.3);
-  background: rgba(18, 26, 46, 0.8);
+  border-color: #93c5fd;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.08);
+  transform: translateY(-1px);
 }
 .biz-icon { font-size: 28px; margin-bottom: 8px; }
-.biz-card h3 { font-size: 13px; font-weight: 600; color: #cdd6f0; margin-bottom: 6px; }
-.biz-card p { font-size: 11px; color: #6b7a94; line-height: 1.6; margin: 0; }
+.biz-card h3 { font-size: 13px; font-weight: 600; color: #1e293b; margin-bottom: 6px; }
+.biz-card p { font-size: 11px; color: #64748b; line-height: 1.6; margin: 0; }
 
 .honor-grid {
   display: grid;
@@ -226,8 +233,8 @@
   gap: 10px;
 }
 .honor-item {
-  background: rgba(18, 26, 46, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 12px 18px;
   display: flex;
@@ -237,13 +244,13 @@
 .honor-year {
   font-size: 13px;
   font-weight: 700;
-  color: #3b82f6;
-  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
   padding: 3px 10px;
   border-radius: 6px;
   white-space: nowrap;
 }
-.honor-text { font-size: 14px; color: #c0d0e8; }
+.honor-text { font-size: 14px; color: #334155; }
 
 .contact-grid {
   display: grid;
@@ -251,8 +258,8 @@
   gap: 12px;
 }
 .contact-item {
-  background: rgba(18, 26, 46, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 14px 18px;
   display: flex;
@@ -262,21 +269,21 @@
 .contact-label {
   font-size: 11px;
   font-weight: 600;
-  color: #576580;
+  color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-.contact-value { font-size: 14px; color: #c0d0e8; }
+.contact-value { font-size: 14px; color: #334155; }
 
 .about-footer {
   margin-top: 20px;
   padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid #e2e8f0;
   text-align: center;
 }
 .about-footer p {
   font-size: 12px;
-  color: #4a5568;
+  color: #94a3b8;
   margin: 2px 0;
 }
 
