@@ -10,8 +10,8 @@
           </svg>
         </div>
         <div class="header-title-group">
-          <h1 class="system-name">Gas System 监控看板</h1>
-          <p class="subtitle">实时数据监测与预警</p>
+          <h1 class="system-name">TVOC 智能监测预警系统</h1>
+          <p class="subtitle">TVOC 实时监测与智能预警</p>
         </div>
       </div>
       <div class="header-right">
@@ -35,6 +35,27 @@
           :unit="item.unit"
           :threshold="item.threshold"
         />
+
+        <!-- 各组分浓度卡片 -->
+        <div class="data-card components-card">
+          <div class="card-header">
+            <span class="card-title">各组分浓度</span>
+          </div>
+          <div class="components-grid">
+            <div class="comp-item" v-for="comp in components" :key="comp.name">
+              <div class="comp-header">
+                <span class="comp-name">{{ comp.name }}</span>
+                <span class="comp-number">
+                  <span class="comp-value">{{ comp.value.toFixed(2) }}</span>
+                  <span class="comp-unit">mg/m³</span>
+                </span>
+              </div>
+              <div class="comp-bar">
+                <div class="comp-fill" :style="{ width: comp.percentage + '%' }"></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- 右侧：预测图表 + 预警列表 -->
@@ -79,6 +100,13 @@ const indicators = ref([
   { title: "风速", value: 0, unit: "m/s", threshold: 2.0 },
 ]);
 
+// 各组分浓度数据（HEXANE, TOLUENE, ACETONE）
+const components = ref([
+  { name: "HEXANE", value: 0, percentage: 0 },
+  { name: "TOLUENE", value: 0, percentage: 0 },
+  { name: "ACETONE", value: 0, percentage: 0 },
+]);
+
 const latestUpdate = ref("加载中...");
 const currentTime = ref(new Date().toLocaleString());
 const exporting = ref(false);
@@ -93,6 +121,21 @@ const fetchRealtimeData = async () => {
     indicators.value[1].value = res.temp ?? 0;
     indicators.value[2].value = res.humidity ?? 0;
     indicators.value[3].value = res.wind ?? 0;
+    // 各组分浓度数据
+    if (res.components) {
+      components.value[0].value = res.components.hexane ?? 0;
+      components.value[1].value = res.components.toluene ?? 0;
+      components.value[2].value = res.components.acetone ?? 0;
+    } else {
+      // 如果没有嵌套对象，尝试从顶层字段获取
+      components.value[0].value = res.hexane ?? 0;
+      components.value[1].value = res.toluene ?? 0;
+      components.value[2].value = res.acetone ?? 0;
+    }
+    // 计算百分比柱状图（阈值参考 200 mg/m³）
+    components.value.forEach(c => {
+      c.percentage = Math.min((c.value / 200) * 100, 100);
+    });
     latestUpdate.value = new Date().toLocaleTimeString();
   } catch (err) {
     // 后端未就绪时使用模拟数据
@@ -100,6 +143,13 @@ const fetchRealtimeData = async () => {
     indicators.value[1].value = 26.3;
     indicators.value[2].value = 68;
     indicators.value[3].value = 1.2;
+    // 模拟组分数据
+    components.value[0].value = 0.35;
+    components.value[1].value = 0.12;
+    components.value[2].value = 0.08;
+    components.value.forEach(c => {
+      c.percentage = Math.min((c.value / 200) * 100, 100);
+    });
     latestUpdate.value = new Date().toLocaleTimeString();
   }
 };
@@ -292,7 +342,7 @@ onUnmounted(() => {
 
 .right-panel {
   display: grid;
-  grid-template-rows: 1fr 1fr;
+  grid-template-rows: 3fr 2fr;
   gap: 24px;
   min-height: 0;
 }
@@ -354,6 +404,71 @@ onUnmounted(() => {
   border-radius: 10px;
 }
 
+/* ===== 各组分浓度卡片 ===== */
+.components-card {
+  flex-shrink: 0;
+}
+
+.components-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.comp-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.comp-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #cdd6f0;
+  letter-spacing: 0.5px;
+}
+
+.comp-number {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.comp-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #00d4ff;
+  font-variant-numeric: tabular-nums;
+}
+
+.comp-unit {
+  font-size: 11px;
+  color: #6b7a94;
+}
+
+/* 进度条 */
+.comp-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.comp-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #00d4ff, #009cbb);
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 0;
+}
+
 /* =====================================
    ===== 笔记本 1366-1919px =====
    ===================================== */
@@ -409,6 +524,10 @@ onUnmounted(() => {
 
   .chart-panel .chart-container {
     padding: 2px 12px 10px;
+  }
+
+  .comp-value {
+    font-size: 17px;
   }
 }
 
@@ -483,7 +602,7 @@ onUnmounted(() => {
   }
 
   .right-panel {
-    grid-template-rows: 280px 240px;
+    grid-template-rows: 300px 200px;
     gap: 16px;
   }
 
@@ -511,6 +630,14 @@ onUnmounted(() => {
   td {
     padding: 8px 10px;
   }
+
+  .components-card {
+    grid-column: 1 / -1;
+  }
+
+  .comp-value {
+    font-size: 18px;
+  }
 }
 
 /* 极小屏处理 */
@@ -520,12 +647,16 @@ onUnmounted(() => {
   }
 
   .right-panel {
-    grid-template-rows: 240px 220px;
+    grid-template-rows: 240px 160px;
   }
 
   .header-right .status-badge,
   .header-right .clock {
     display: none;
+  }
+
+  .comp-value {
+    font-size: 16px;
   }
 }
 </style>
