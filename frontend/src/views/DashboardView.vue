@@ -26,6 +26,11 @@
       </div>
     </header>
 
+    <!-- 演示模式横幅 -->
+    <div v-if="demoMode" class="demo-banner">
+      ⚠️ 当前为<strong>演示模式</strong> — 所有数据均为模拟展示，不代表真实监测结果
+    </div>
+
     <!-- ===== 主体内容 ===== -->
     <main class="main-content">
       <!-- 左侧：实时指标卡片 -->
@@ -126,10 +131,10 @@ provide("demoMode", demoMode);
 const fetchRealtimeData = async () => {
   // 演示模式：生成随机模拟数据，不调用后端 API
   if (demoMode.value) {
-    indicators.value[0].value = parseFloat((Math.random() * 2 + 0.3).toFixed(2));
-    indicators.value[1].value = parseFloat((Math.random() * 5 + 22).toFixed(1));
-    indicators.value[2].value = Math.floor(Math.random() * 15 + 58);
-    indicators.value[3].value = parseFloat((Math.random() * 1.5 + 0.5).toFixed(1));
+    indicators.value[0].value = parseFloat((Math.random() * 40 + 70).toFixed(2));  // VOCs: 70-110 (可能超标)
+    indicators.value[1].value = parseFloat((Math.random() * 8 + 24).toFixed(1));   // 温度: 24-32
+    indicators.value[2].value = Math.floor(Math.random() * 20 + 55);              // 湿度: 55-75
+    indicators.value[3].value = parseFloat((Math.random() * 2.5 + 1.0).toFixed(1)); // 风速: 1.0-3.5
     // 模拟各组分浓度
     components.value[0].value = parseFloat((Math.random() * 0.4 + 0.1).toFixed(2));
     components.value[1].value = parseFloat((Math.random() * 0.3 + 0.05).toFixed(2));
@@ -374,6 +379,21 @@ onUnmounted(() => {
 @keyframes demo-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
   50% { box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
+}
+
+/* ===== 演示模式横幅 ===== */
+.demo-banner {
+  background: linear-gradient(90deg, #fef3c7, #fef9e7);
+  color: #92400e;
+  text-align: center;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-bottom: 2px solid #f59e0b;
+  flex-shrink: 0;
+}
+.demo-banner strong {
+  color: #d97706;
 }
 
 /* ===== 主体网格 ===== */

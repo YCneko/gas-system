@@ -1,5 +1,8 @@
 <template>
   <div class="alert-list">
+    <!-- 演示模式标签（表格上方） -->
+    <div v-if="demoMode" class="demo-badge">🔬 演示数据</div>
+
     <table class="alert-table">
       <thead>
         <tr>
@@ -14,7 +17,7 @@
           <tr
             v-for="(alert, index) in sortedAlerts"
             :key="alert.id || alert.time + alert.metric + index"
-            :class="{ 'row-new': alert._isNew }"
+            :class="{ 'row-new': alert._isNew, 'row-demo': alert._isDemo || demoMode }"
             @click="openDetail(alert)"
           >
             <td>{{ alert.time }}</td>
@@ -29,9 +32,6 @@
         </TransitionGroup>
       </tbody>
     </table>
-
-    <!-- 演示模式标签 -->
-    <div v-if="demoMode" class="demo-badge">🔬 演示数据</div>
 
     <div v-if="!sortedAlerts.length" class="empty-state">
       <span>暂无预警信息 ✅</span>
@@ -105,12 +105,12 @@ const fetchAlerts = async () => {
     if (demoMode.value) {
       // 演示模式：使用内嵌模拟数据（6条，涵盖 error/warn/info 三个等级）
       data = [
-        { id: 1, time: "2026-06-18 14:30", metric: "VOCs浓度", level: "error", detail: "预测浓度将达到 12.5 mg/m³，超过限值 80%", predicted_exceedance_time: "2026-06-18 14:30" },
-        { id: 2, time: "2026-06-18 15:00", metric: "VOCs浓度", level: "warn", detail: "预测浓度将达到 8.2 mg/m³，接近限值", predicted_exceedance_time: "2026-06-18 15:00" },
-        { id: 3, time: "2026-06-18 15:45", metric: "温度", level: "info", detail: "温度略有上升趋势，当前正常", predicted_exceedance_time: "2026-06-18 15:45" },
-        { id: 4, time: "2026-06-18 16:20", metric: "VOCs浓度", level: "error", detail: "预测浓度将达到 14.1 mg/m³，严重超标", predicted_exceedance_time: "2026-06-18 16:20" },
-        { id: 5, time: "2026-06-18 17:10", metric: "湿度", level: "info", detail: "湿度变化趋势正常，无需关注", predicted_exceedance_time: "2026-06-18 17:10" },
-        { id: 6, time: "2026-06-18 18:00", metric: "VOCs浓度", level: "warn", detail: "预测浓度将达到 7.8 mg/m³，接近限值", predicted_exceedance_time: "2026-06-18 18:00" },
+        { id: "demo-1", time: new Date(Date.now() + 3600000).toLocaleString(), metric: "VOCs浓度", level: "error", detail: "⚠ 预测浓度将达 125.3 mg/m³，超过100mg/m³限值", predicted_exceedance_time: new Date(Date.now() + 3600000).toISOString(), _isDemo: true },
+        { id: "demo-2", time: new Date(Date.now() + 7200000).toLocaleString(), metric: "VOCs浓度", level: "error", detail: "⚠ 预测浓度将达 118.7 mg/m³，超过100mg/m³限值", predicted_exceedance_time: new Date(Date.now() + 7200000).toISOString(), _isDemo: true },
+        { id: "demo-3", time: new Date(Date.now() + 10800000).toLocaleString(), metric: "VOCs浓度", level: "warn", detail: "⚠ 预测浓度将达 105.2 mg/m³，接近并略超限值", predicted_exceedance_time: new Date(Date.now() + 10800000).toISOString(), _isDemo: true },
+        { id: "demo-4", time: new Date(Date.now() + 14400000).toLocaleString(), metric: "VOCs浓度", level: "warn", detail: "⚠ 预测浓度将达 102.1 mg/m³，接近限值", predicted_exceedance_time: new Date(Date.now() + 14400000).toISOString(), _isDemo: true },
+        { id: "demo-5", time: new Date(Date.now() + 18000000).toLocaleString(), metric: "VOCs浓度", level: "info", detail: "ℹ 预测浓度将达 92.5 mg/m³，处于正常偏高范围", predicted_exceedance_time: new Date(Date.now() + 18000000).toISOString(), _isDemo: true },
+        { id: "demo-6", time: new Date(Date.now() + 21600000).toLocaleString(), metric: "VOCs浓度", level: "info", detail: "ℹ 预测浓度将达 88.3 mg/m³，处于正常范围", predicted_exceedance_time: new Date(Date.now() + 21600000).toISOString(), _isDemo: true },
       ];
     } else {
       data = await api.getAlertList();
@@ -353,13 +353,24 @@ tr:hover {
 /* ---------- 演示模式标签 ---------- */
 .demo-badge {
   text-align: center;
-  padding: 6px 16px;
-  margin: 8px 16px 0;
-  background: rgba(37, 99, 235, 0.08);
+  padding: 8px 16px;
+  margin: 0 0 4px 0;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(37, 99, 235, 0.05));
   color: #2563eb;
-  border-radius: 8px;
-  font-size: 12px;
-  border: 1px solid rgba(37, 99, 235, 0.15);
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 600;
+  border-bottom: 2px dashed #93c5fd;
+  letter-spacing: 1px;
+}
+
+/* ---------- 演示行样式 ---------- */
+tr.row-demo {
+  border-left: 3px solid #93c5fd;
+  background: rgba(37, 99, 235, 0.02);
+}
+tr.row-demo:hover {
+  background: rgba(37, 99, 235, 0.06);
 }
 
 /* ---------- 当前时间指示条 ---------- */

@@ -414,22 +414,35 @@ const getR2Class = (r2) => {
 const fetchModelData = async () => {
   let apiReady = false;
   try {
-    // 尝试从后端获取模型信息与指标数据（方法将由 Agent #3 添加）
-    const info = await api.getTrainingInfo?.();
-    const metrics = await api.getModelMetrics?.();
+    // 获取模型信息
+    const info = await api.getModelInfo?.();
     if (info) {
-      archInfo.value = { ...archInfo.value, ...info };
+      // info 包含 architecture, parameters, lookback 等字段
+      archInfo.value = {
+        arch: info.architecture || archInfo.value.arch,
+        params: info.parameters ? `~${(info.parameters / 1000).toFixed(0)}K` : archInfo.value.params,
+        window: info.lookback ? `${info.lookback} 小时` : archInfo.value.window,
+        dropout: info.dropout != null ? String(info.dropout) : archInfo.value.dropout,
+        optimizer: info.optimizer || archInfo.value.optimizer,
+        loss: info.loss_function || archInfo.value.loss,
+        samples: info.training_samples ? `${info.training_samples.toLocaleString()} 条` : archInfo.value.samples,
+        trainTime: info.trained_at ? `~120 秒 (RTX 4060)，训练于 ${info.trained_at}` : archInfo.value.trainTime,
+        featureDim: info.features ? `${info.features} 维` : archInfo.value.featureDim,
+      };
       apiReady = true;
     }
-    if (metrics && Array.isArray(metrics)) {
-      versions.value = metrics.map((m, i) => ({
-        version: m.version || `V${i + 1}`,
+
+    // 获取版本指标
+    const metricsData = await api.getModelMetrics?.();
+    if (metricsData && metricsData.versions && Array.isArray(metricsData.versions)) {
+      versions.value = metricsData.versions.map((m, i) => ({
+        version: m.name || `V${i + 1}`,
         strategy: m.strategy || "-",
         r2: m.r2 ?? 0,
         mae: m.mae ?? 0,
         mape: m.mape ?? "-",
         rmse: m.rmse ?? 0,
-        isCurrent: i === 0,
+        isCurrent: m.name === metricsData.current_version,
       }));
       apiReady = true;
     }
